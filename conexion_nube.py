@@ -14,31 +14,17 @@ import requests
 
 import requests
 
-def subir_pedido_nube(pedido_id, datos_dict):
-    # Convertimos el diccionario a un string JSON válido
-    datos_json = json.dumps(datos_dict, ensure_ascii=False)
+def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
+    supabase = obtener_cliente()
+    ruta_nube = f"{pedido_id}/{nombre_archivo}"
     
-    url = f"{SUPABASE_URL}/rest/v1/pedidos"
-    
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal"
-    }
-    
-    payload = {"id": pedido_id, "datos_json": datos_json}
-    
-    # Hacemos la petición POST directamente
-    respuesta = requests.post(url, headers=headers, json=payload)
-    
-    # Si el pedido ya existe (código 409), actualizamos
-    if respuesta.status_code == 409:
-        url_update = f"{url}?id=eq.{pedido_id}"
-        requests.patch(url_update, headers=headers, json=payload)
-    elif respuesta.status_code >= 400:
-        # Mostramos el error exacto de Supabase
-        raise Exception(f"Error {respuesta.status_code}: {respuesta.text}")
+    # 🔥 LE PASAMOS LOS BYTES DIRECTAMENTE, SIN "open()"
+    supabase.storage.from_("fotos").upload(
+        path=ruta_nube, 
+        file=contenido_bytes, 
+        file_options={"content-type": "image/jpeg"}
+    )
+    return supabase.storage.from_("fotos").get_public_url(ruta_nube)
 
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
