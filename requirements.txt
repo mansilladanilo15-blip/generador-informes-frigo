@@ -1,0 +1,7 @@
+streamlit
+pandas
+Pillow
+pdfkit
+pytesseract
+supabase
+st-supabase-connection

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 8px;
+      color: #1a4d8f;
+    }
+
+    #header-wrap {
+      /* SIN padding lateral: wkhtmltopdf maneja los márgenes */
+      padding: 5px 0 0 0;
+      margin: 0;
+    }
+
+    .header-repetido {
+      width: 100%;
+      border-bottom: 1px solid #c5cdd6;
+      padding-bottom: 4px;
+    }
+
+    .header-repetido table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .header-repetido td {
+      vertical-align: middle;
+    }
+
+    .logo-izq-mini {
+      text-align: left;
+      width: 55px;
+    }
+
+    .logo-der-mini {
+      text-align: right;
+      width: 55px;
+    }
+
+    .logo-izq-mini img,
+    .logo-der-mini img {
+      height: 32px;
+      width: auto;
+      max-width: 55px;
+      object-fit: contain;
+      display: inline-block;
+    }
+
+    .centro-mini {
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .empresa-mini {
+      font-size: 8px;
+      color: #1a4d8f;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .titulo-mini {
+      font-size: 7px;
+      color: #888;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+  </style>
+</head>
+<body>
+  <div id="header-wrap">
+    <div class="header-repetido">
+      <table>
+        <tr>
+          <td class="logo-izq-mini">{{logo_izq_mini}}</td>
+          <td class="centro-mini">
+            <div class="empresa-mini">{{empresa}}</div>
+            <div class="titulo-mini">{{titulo_informe}} · N° {{nro_pedido}}</div>
+          </td>
+          <td class="logo-der-mini">{{logo_der_mini}}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

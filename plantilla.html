@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page {
+      size: Letter;
+      margin: 2.54cm;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 10px;
+      color: #2c3e50;
+      line-height: 1.3;
+    }
+
+    .encabezado {
+      width: 100%;
+      border-bottom: 3px solid #1a4d8f;
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+    }
+
+    .encabezado td { vertical-align: middle; }
+
+    .logo-box-izq,
+    .logo-box-der {
+      width: 130px;
+      height: 110px;
+      vertical-align: middle;
+    }
+
+    .logo-box-izq { text-align: left; }
+    .logo-box-der { text-align: right; }
+
+    .logo-box-izq img,
+    .logo-box-der img {
+      height: 100px;
+      width: auto;
+      max-width: 130px;
+      object-fit: contain;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .titulo-box { text-align: center; padding: 0 10px; }
+
+    .empresa {
+      font-size: 9px;
+      font-weight: 600;
+      color: #1a4d8f;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    .titulo-box h1 {
+      font-size: 14px;
+      color: #1a4d8f;
+      margin: 1px 0;
+      letter-spacing: 0.3px;
+    }
+
+    .nro-doc {
+      font-size: 9px;
+      font-weight: 700;
+      color: #e74c3c;
+    }
+
+    .banda-estado {
+      background: #f2f6fb;
+      border-left: 3px solid #1a4d8f;
+      padding: 4px 8px;
+      margin: 5px 0;
+      font-size: 8.5px;
+    }
+
+    .banda-estado .etiqueta { font-weight: 700; color: #1a4d8f; }
+    .banda-estado .separador { color: #ccc; margin: 0 6px; }
+
+    .tabla-datos {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #d0d7de;
+      margin-bottom: 8px;
+    }
+
+    .tabla-datos td {
+      padding: 4px 7px;
+      border: 1px solid #d0d7de;
+      vertical-align: top;
+      font-size: 9px;
+    }
+
+    .etiqueta-campo {
+      width: 15%;
+      background: #f2f6fb;
+      font-weight: 600;
+      color: #1a4d8f;
+      text-transform: uppercase;
+    }
+
+    .valor-campo { width: 35%; }
+
+    .subtitulo {
+      background: #e8f0fa;
+      color: #1a4d8f;
+      font-weight: 700;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 4px 7px;
+      border: 1px solid #d0d7de;
+      border-bottom: none;
+    }
+  </style>
+</head>
+<body>
+
+  <table class="encabezado">
+    <tr>
+      <td class="logo-box-izq">{{logo_izq_html_grande}}</td>
+      <td class="titulo-box">
+        <div class="empresa">{{empresa}}</div>
+        <h1>{{titulo_informe}}</h1>
+        {{nro_doc_html}}
+      </td>
+      <td class="logo-box-der">{{logo_der_html_grande}}</td>
+    </tr>
+  </table>
+
+  <div class="banda-estado">
+    <span class="etiqueta">FECHA:</span> {{fecha}}
+    <span class="separador">|</span>
+    <span class="etiqueta">N° ENTREGA:</span> {{nro_entrega}}
+    <span class="separador">|</span>
+    <span class="etiqueta">GUÍA DESPACHO:</span> {{guia_despacho}}
+  </div>
+
+  <table class="tabla-datos">
+    <tr>
+      <td class="etiqueta-campo">Cliente / Destino</td>
+      <td class="valor-campo">{{cliente}}</td>
+      <td class="etiqueta-campo">Origen</td>
+      <td class="valor-campo">{{origen}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta-campo">N° Pedido</td>
+      <td class="valor-campo">{{nro_pedido_display}}</td>
+      <td class="etiqueta-campo">Tipo</td>
+      <td class="valor-campo">{{tipo_informe}}</td>
+    </tr>
+  </table>
+
+  <div class="subtitulo">🚛 Datos del transporte</div>
+  <table class="tabla-datos" style="margin-bottom: 12px;">
+    <tr>
+      <td class="etiqueta-campo">Transporte</td>
+      <td class="valor-campo">{{transporte}}</td>
+      <td class="etiqueta-campo">Chofer</td>
+      <td class="valor-campo">{{chofer}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta-campo">Patente Camión</td>
+      <td class="valor-campo">{{patente_camion}}</td>
+      <td class="etiqueta-campo">Patente Rampla</td>
+      <td class="valor-campo">{{patente_rampla}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta-campo">Sello Final</td>
+      <td class="valor-campo">{{sello_final}}</td>
+      <td class="etiqueta-campo">Sellos Provisorios</td>
+      <td class="valor-campo">{{sellos_provisorios}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta-campo">N° Termógrafo</td>
+      <td class="valor-campo" colspan="3">{{nro_termografo}}</td>
+    </tr>
+  </table>
+
+</body>
+</html>
