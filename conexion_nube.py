@@ -10,25 +10,34 @@ def obtener_cliente():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- Funciones para Pedidos (Base de Datos) ---
+import requests
+
 def subir_pedido_nube(pedido_id, datos_dict):
-    supabase = obtener_cliente()
     datos_json = json.dumps(datos_dict, ensure_ascii=False)
     
-    try:
-        # 🔥 La sintaxis correcta en Python es pasar returning="minimal" como argumento
-        supabase.table("pedidos").insert(
-            {"id": pedido_id, "datos_json": datos_json},
-            returning="minimal"
-        ).execute()
-    except Exception as e:
-        # Si el pedido ya existe (código 23505), lo actualizamos
-        if "23505" in str(e) or "duplicate key" in str(e).lower():
-            supabase.table("pedidos").update(
-                {"datos_json": datos_json}
-            ).eq("id", pedido_id).execute()
-        else:
-            # Si es otro error, lo mostramos para poder depurar
-            raise e
+    # Construimos la URL de la API de Supabase
+    url = f"{SUPABASE_URL}/rest/v1/pedidos"
+    
+    # Cabeceras: Autenticación y la clave para que NO devuelva el dato
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal" # 🔥 ESTO ES LO QUE SOLUCIONA EL ERROR
+    }
+    
+    payload = {"id": pedido_id, "datos_json": datos_json}
+    
+    # Hacemos la petición POST directamente
+    respuesta = requests.post(url, headers=headers, json=payload)
+    
+    # Si el pedido ya existe, hacemos un PATCH (actualizar)
+    if respuesta.status_code == 409: # 409 es el código de "conflicto/duplicado"
+        url_update = f"{url}?id=eq.{pedido_id}"
+        requests.patch(url_update, headers=headers, json=payload)
+    elif respuesta.status_code >= 400:
+        # Si hay otro error, lo mostramos
+        raise Exception(f"Error de Supabase: {respuesta.text}")
 
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
