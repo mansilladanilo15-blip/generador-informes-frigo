@@ -15,19 +15,16 @@ def subir_pedido_nube(pedido_id, datos_dict):
     datos_json = json.dumps(datos_dict, ensure_ascii=False)
     
     try:
-        # 🔥 return=minimal le dice a Supabase: "Guarda el dato, pero NO me lo devuelvas"
-        # Esto evita que Postgres pida el permiso de SELECT y soluciona el error.
+        # 🔥 return=minimal va después del insert, no dentro de los paréntesis
         supabase.table("pedidos").insert(
-# ✅ CORRECTO
-supabase.table("pedidos").insert(
-    {"id": pedido_id, "datos_json": datos_json}
-).returning("minimal").execute()
+            {"id": pedido_id, "datos_json": datos_json}
+        ).returning("minimal").execute()
     except Exception as e:
-        # Si el error es porque el pedido ya existe (código 23505), entonces actualizamos.
+        # Si el pedido ya existe (código 23505), lo actualizamos
         if "23505" in str(e) or "duplicate key" in str(e).lower():
             supabase.table("pedidos").update(
                 {"datos_json": datos_json}
-            ).eq("id", pedido_id).execute()
+            ).eq("id", pedido_id).returning("minimal").execute()
         else:
             raise e
 
@@ -35,12 +32,26 @@ def obtener_pedidos_nube():
     supabase = obtener_cliente()
     respuesta = supabase.table("pedidos").select("*").execute()
     pedidos = []
-    for fila in respuesta.data:
-        try:
-            pedidos.append(json.loads(fila["datos_json"]))
-        except:
-            pass
+    if respuesta.data:
+        for fila in respuesta.data:
+            try:
+                pedidos.append(json.loads(fila["datos_json"]))
+            except Exception:
+                pass
     return pedidos
+
+def borrar_pedido_nube(pedido_id):
+    supabase = obtener_cliente()
+    # Borramos las fotos del storage primero
+    try:
+        fotos = obtener_fotos_nube(pedido_id)
+        if fotos:
+            rutas = [f"{pedido_id}/{f}" for f in fotos]
+            supabase.storage.from_("fotos").remove(rutas)
+    except Exception:
+        pass
+    # Luego borramos el registro de la base de datos
+    supabase.table("pedidos").delete().eq("id", pedido_id).execute()
 
 # --- Funciones para Fotos (Storage) ---
 def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
@@ -54,8 +65,9 @@ def obtener_fotos_nube(pedido_id):
     supabase = obtener_cliente()
     try:
         archivos = supabase.storage.from_("fotos").list(pedido_id)
+        # Filtramos solo imágenes
         return [a['name'] for a in archivos if a['name'].endswith(('.jpg', '.jpeg', '.png'))]
-    except:
+    except Exception:
         return []
 
 def descargar_foto_nube(pedido_id, nombre_archivo):
@@ -66,4 +78,5 @@ def descargar_foto_nube(pedido_id, nombre_archivo):
 def borrar_foto_nube(pedido_id, nombre_archivo):
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
+    # 🔥 Aquí estaba el error, faltaba cerrar el corchete y el paréntesis
     supabase.storage.from_("fotos").remove([ruta_nube])
