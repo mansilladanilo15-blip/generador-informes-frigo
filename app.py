@@ -9,6 +9,11 @@ import os
 import uuid
 import re
 import time
+import sys
+from pathlib import Path
+
+# 🔥 ESTO LE DICE A STREAMLIT CLOUD DÓNDE ESTÁN TUS ARCHIVOS
+sys.path.insert(0, str(Path(__file__).parent))
 
 import config
 from generador import generar_informe
