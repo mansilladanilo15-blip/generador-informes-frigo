@@ -15,17 +15,19 @@ def subir_pedido_nube(pedido_id, datos_dict):
     datos_json = json.dumps(datos_dict, ensure_ascii=False)
     
     try:
-        # 🔥 return=minimal va después del insert, no dentro de los paréntesis
+        # 🔥 La sintaxis correcta en Python es pasar returning="minimal" como argumento
         supabase.table("pedidos").insert(
-            {"id": pedido_id, "datos_json": datos_json}
-        ).returning("minimal").execute()
+            {"id": pedido_id, "datos_json": datos_json},
+            returning="minimal"
+        ).execute()
     except Exception as e:
         # Si el pedido ya existe (código 23505), lo actualizamos
         if "23505" in str(e) or "duplicate key" in str(e).lower():
             supabase.table("pedidos").update(
                 {"datos_json": datos_json}
-            ).eq("id", pedido_id).returning("minimal").execute()
+            ).eq("id", pedido_id).execute()
         else:
+            # Si es otro error, lo mostramos para poder depurar
             raise e
 
 def obtener_pedidos_nube():
