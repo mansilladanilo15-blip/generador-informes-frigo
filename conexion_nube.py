@@ -52,11 +52,21 @@ def borrar_pedido_nube(pedido_id):
     supabase.table("pedidos").delete().eq("id", pedido_id).execute()
 
 # --- Funciones para Fotos (Storage) ---
+import io
+
 def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
-    # Subimos al balde "fotos"
-    supabase.storage.from_("fotos").upload(ruta_nube, contenido_bytes, {"content-type": "image/jpeg"})
+    
+    # 🔥 Convertimos el memoryview a bytes y lo envolvemos en BytesIO
+    # para que Supabase lo trate como un archivo en memoria y NO intente abrirlo del disco.
+    archivo_en_memoria = io.BytesIO(bytes(contenido_bytes))
+    
+    supabase.storage.from_("fotos").upload(
+        path=ruta_nube,
+        file=archivo_en_memoria,
+        file_options={"content-type": "image/jpeg"}
+    )
     return supabase.storage.from_("fotos").get_public_url(ruta_nube)
 
 def obtener_fotos_nube(pedido_id):
