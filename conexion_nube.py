@@ -65,19 +65,32 @@ def borrar_pedido_nube(pedido_id):
 # --- Funciones para Fotos (Storage) ---
 import io
 
+import os
+
 def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
     
-    # 🔥 Convertimos el memoryview a bytes y lo envolvemos en BytesIO
-    # para que Supabase lo trate como un archivo en memoria y NO intente abrirlo del disco.
-    archivo_en_memoria = io.BytesIO(bytes(contenido_bytes))
+    # Creamos una ruta de archivo temporal simple
+    ruta_temporal = f"temp_{nombre_archivo}"
     
-    supabase.storage.from_("fotos").upload(
-        path=ruta_nube,
-        file=archivo_en_memoria,
-        file_options={"content-type": "image/jpeg"}
-    )
+    # 1. Escribimos los bytes en un archivo real
+    with open(ruta_temporal, "wb") as f:
+        f.write(bytes(contenido_bytes))
+    
+    try:
+        # 2. Abrimos el archivo y lo subimos (la librería entiende esto)
+        with open(ruta_temporal, "rb") as f:
+            supabase.storage.from_("fotos").upload(
+                path=ruta_nube,
+                file=f,
+                file_options={"content-type": "image/jpeg"}
+            )
+    finally:
+        # 3. Borramos el archivo temporal
+        if os.path.exists(ruta_temporal):
+            os.remove(ruta_temporal)
+            
     return supabase.storage.from_("fotos").get_public_url(ruta_nube)
 def obtener_fotos_nube(pedido_id):
     supabase = obtener_cliente()
