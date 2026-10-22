@@ -19,14 +19,13 @@ def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
     
-    # 🔥 CREAMOS UN ARCHIVO TEMPORAL EN EL DISCO
-    # La librería de Supabase necesita una ruta de archivo real para funcionar.
+    # 1. Creamos un archivo temporal real en el disco del servidor
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         tmp.write(bytes(contenido_bytes))
         ruta_temporal = tmp.name
     
     try:
-        # 🔥 SUBIMOS EL ARCHIVO DESDE LA RUTA TEMPORAL
+        # 2. Subimos el archivo abriéndolo con open() (esto es lo que la librería sí entiende)
         with open(ruta_temporal, "rb") as f:
             supabase.storage.from_("fotos").upload(
                 path=ruta_nube,
@@ -34,11 +33,10 @@ def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
                 file_options={"content-type": "image/jpeg"}
             )
     finally:
-        # 🔥 BORRAMOS EL ARCHIVO TEMPORAL PARA NO LLENAR EL DISCO
+        # 3. Borramos el archivo temporal para no llenar el disco
         os.remove(ruta_temporal)
         
     return supabase.storage.from_("fotos").get_public_url(ruta_nube)
-
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
     respuesta = supabase.table("pedidos").select("*").execute()
