@@ -3,7 +3,7 @@ from supabase import create_client
 import json
 
 # 🔥 PON AQUÍ TUS LLAVES DE SUPABASE
-SUPABASE_URL = "https://ipqcwszkjpswvajtnzhh.supabase.co/rest/v1/"
+SUPABASE_URL = "https://ipqcwszkjpswvajtnzhh.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwcWN3c3pranBzd3ZhanRuemhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI2NjU4NTIsImV4cCI6MjEwODI0MTg1Mn0.tQvowfgPPisrCaP44FB1_l4zji6VtAdw-d8GtuHL7ow"
 
 def obtener_cliente():
