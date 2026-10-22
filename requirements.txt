@@ -1,7 +1,7 @@
 streamlit
 pandas
 Pillow
-pdfkit
+weasyprint
 pytesseract
 supabase
 st-supabase-connection
