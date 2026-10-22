@@ -30,7 +30,7 @@ def subir_pedido_nube(pedido_id, datos_dict):
             ).eq("id", pedido_id).execute()
         else:
             # Si es otro error, lo mostramos
-            raise Exception(f"Fallo al guardar: {str(e)}")
+            raise Exception(f"ERROR API: {e}"))
 
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
