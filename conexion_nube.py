@@ -68,7 +68,6 @@ def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
         file_options={"content-type": "image/jpeg"}
     )
     return supabase.storage.from_("fotos").get_public_url(ruta_nube)
-
 def obtener_fotos_nube(pedido_id):
     supabase = obtener_cliente()
     try:
