@@ -12,25 +12,33 @@ def obtener_cliente():
 # --- Funciones para Pedidos (Base de Datos) ---
 import requests
 
+import requests
+
 def subir_pedido_nube(pedido_id, datos_dict):
-    supabase = obtener_cliente()
+    # Convertimos el diccionario a un string JSON válido
     datos_json = json.dumps(datos_dict, ensure_ascii=False)
     
-    try:
-        # Usamos la librería oficial pero sin pedir que devuelva el dato
-        supabase.table("pedidos").insert(
-            {"id": pedido_id, "datos_json": datos_json}
-        ).execute()
-    except Exception as e:
-        error_str = str(e).lower()
-        # Si el pedido ya existe, actualizamos
-        if "23505" in error_str or "duplicate" in error_str:
-            supabase.table("pedidos").update(
-                {"datos_json": datos_json}
-            ).eq("id", pedido_id).execute()
-        else:
-            # Si es otro error, lo mostramos
-            raise Exception(f"ERROR API: {e}"))
+    url = f"{SUPABASE_URL}/rest/v1/pedidos"
+    
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+    }
+    
+    payload = {"id": pedido_id, "datos_json": datos_json}
+    
+    # Hacemos la petición POST directamente
+    respuesta = requests.post(url, headers=headers, json=payload)
+    
+    # Si el pedido ya existe (código 409), actualizamos
+    if respuesta.status_code == 409:
+        url_update = f"{url}?id=eq.{pedido_id}"
+        requests.patch(url_update, headers=headers, json=payload)
+    elif respuesta.status_code >= 400:
+        # Mostramos el error exacto de Supabase
+        raise Exception(f"Error {respuesta.status_code}: {respuesta.text}")
 
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
