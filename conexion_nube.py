@@ -85,7 +85,9 @@ def obtener_fotos_nube(pedido_id):
 def descargar_foto_nube(pedido_id, nombre_archivo):
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
-    return supabase.storage.from_("fotos").download(ruta_nube)
+    resultado = supabase.storage.from_("fotos").download(ruta_nube)
+    # 🔥 CONVERTIMOS EL MEMORYVIEW A BYTES
+    return bytes(resultado)
 
 def borrar_foto_nube(pedido_id, nombre_archivo):
     supabase = obtener_cliente()
