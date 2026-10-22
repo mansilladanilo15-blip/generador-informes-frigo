@@ -12,9 +12,17 @@ def obtener_cliente():
 # --- Funciones para Pedidos (Base de Datos) ---
 def subir_pedido_nube(pedido_id, datos_dict):
     supabase = obtener_cliente()
-    # Convertimos el diccionario a texto JSON para guardarlo en la columna "datos_json"
     datos_json = json.dumps(datos_dict, ensure_ascii=False)
-    supabase.table("pedidos").upsert({"id": pedido_id, "datos_json": datos_json}).execute()
+    
+    try:
+        # 🔥 Usamos insert en lugar de upsert. Esto evita que Supabase intente devolver el dato.
+        supabase.table("pedidos").insert({"id": pedido_id, "datos_json": datos_json}).execute()
+    except Exception as e:
+        # Si el error es porque el pedido ya existe (código 23505), entonces actualizamos.
+        if "23505" in str(e) or "duplicate key" in str(e).lower():
+            supabase.table("pedidos").update({"datos_json": datos_json}).eq("id", pedido_id).execute()
+        else:
+            raise e
 
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
