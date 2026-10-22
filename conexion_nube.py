@@ -13,30 +13,24 @@ def obtener_cliente():
 import requests
 
 def subir_pedido_nube(pedido_id, datos_dict):
-    # Serializamos el diccionario a JSON
+    supabase = obtener_cliente()
     datos_json = json.dumps(datos_dict, ensure_ascii=False)
     
-    url = f"{SUPABASE_URL}/rest/v1/pedidos"
-    
-    headers = {
-        "apikey": SUPABASE_KEY,  # 🔥 ESTA CABECERA ES OBLIGATORIA
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal"
-    }
-    
-    payload = {"id": pedido_id, "datos_json": datos_json}
-    
-    # Hacemos la petición POST
-    respuesta = requests.post(url, headers=headers, json=payload)
-    
-    # Si el pedido ya existe (código 409), actualizamos
-    if respuesta.status_code == 409:
-        url_update = f"{url}?id=eq.{pedido_id}"
-        requests.patch(url_update, headers=headers, json=payload)
-    elif respuesta.status_code >= 400:
-        # Mostramos el error exacto para depurar
-        raise Exception(f"ERROR REAL DE SUPABASE: {respuesta.status_code} - {respuesta.text}")
+    try:
+        # Usamos la librería oficial pero sin pedir que devuelva el dato
+        supabase.table("pedidos").insert(
+            {"id": pedido_id, "datos_json": datos_json}
+        ).execute()
+    except Exception as e:
+        error_str = str(e).lower()
+        # Si el pedido ya existe, actualizamos
+        if "23505" in error_str or "duplicate" in error_str:
+            supabase.table("pedidos").update(
+                {"datos_json": datos_json}
+            ).eq("id", pedido_id).execute()
+        else:
+            # Si es otro error, lo mostramos
+            raise Exception(f"Fallo al guardar: {str(e)}")
 
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
