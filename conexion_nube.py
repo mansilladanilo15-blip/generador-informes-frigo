@@ -12,16 +12,14 @@ def obtener_cliente():
 # --- Funciones para Pedidos (Base de Datos) ---
 import requests
 
-import requests
-
 def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
     
-    # 🔥 LE PASAMOS LOS BYTES DIRECTAMENTE, SIN "open()"
+    # 🔥 Convertimos el memoryview a bytes puros y se los pasamos directamente
     supabase.storage.from_("fotos").upload(
-        path=ruta_nube, 
-        file=contenido_bytes, 
+        path=ruta_nube,
+        file=bytes(contenido_bytes),
         file_options={"content-type": "image/jpeg"}
     )
     return supabase.storage.from_("fotos").get_public_url(ruta_nube)
