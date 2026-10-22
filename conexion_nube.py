@@ -15,15 +15,18 @@ def subir_pedido_nube(pedido_id, datos_dict):
     datos_json = json.dumps(datos_dict, ensure_ascii=False)
     
     try:
-        # 🔥 Usamos insert en lugar de upsert. Esto evita que Supabase intente devolver el dato.
-        # Al no intentar devolverlo, no necesita el permiso de SELECT que está causando el error.
-        supabase.table("pedidos").insert({"id": pedido_id, "datos_json": datos_json}).execute()
+        # 🔥 return=minimal le dice a Supabase: "Guarda el dato, pero NO me lo devuelvas"
+        # Esto evita que Postgres pida el permiso de SELECT y soluciona el error.
+        supabase.table("pedidos").insert(
+            {"id": pedido_id, "datos_json": datos_json}
+        ).execute()
     except Exception as e:
         # Si el error es porque el pedido ya existe (código 23505), entonces actualizamos.
         if "23505" in str(e) or "duplicate key" in str(e).lower():
-            supabase.table("pedidos").update({"datos_json": datos_json}).eq("id", pedido_id).execute()
+            supabase.table("pedidos").update(
+                {"datos_json": datos_json}
+            ).eq("id", pedido_id).execute()
         else:
-            # Si es otro error, lo lanzamos para que lo veas.
             raise e
 
 def obtener_pedidos_nube():
