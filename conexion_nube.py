@@ -36,7 +36,7 @@ def subir_pedido_nube(pedido_id, datos_dict):
         requests.patch(url_update, headers=headers, json=payload)
     elif respuesta.status_code >= 400:
         # Mostramos el error exacto para depurar
-        raise Exception(f"Error {respuesta.status_code}: {respuesta.text}")
+        raise Exception(f"ERROR REAL DE SUPABASE: {respuesta.status_code} - {respuesta.text}")
 
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
