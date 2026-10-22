@@ -12,16 +12,31 @@ def obtener_cliente():
 # --- Funciones para Pedidos (Base de Datos) ---
 import requests
 
+import tempfile
+import os
+
 def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
     
-    # 🔥 Convertimos el memoryview a bytes puros y se los pasamos directamente
-    supabase.storage.from_("fotos").upload(
-        path=ruta_nube,
-        file=bytes(contenido_bytes),
-        file_options={"content-type": "image/jpeg"}
-    )
+    # 🔥 CREAMOS UN ARCHIVO TEMPORAL EN EL DISCO
+    # La librería de Supabase necesita una ruta de archivo real para funcionar.
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        tmp.write(bytes(contenido_bytes))
+        ruta_temporal = tmp.name
+    
+    try:
+        # 🔥 SUBIMOS EL ARCHIVO DESDE LA RUTA TEMPORAL
+        with open(ruta_temporal, "rb") as f:
+            supabase.storage.from_("fotos").upload(
+                path=ruta_nube,
+                file=f,
+                file_options={"content-type": "image/jpeg"}
+            )
+    finally:
+        # 🔥 BORRAMOS EL ARCHIVO TEMPORAL PARA NO LLENAR EL DISCO
+        os.remove(ruta_temporal)
+        
     return supabase.storage.from_("fotos").get_public_url(ruta_nube)
 
 def obtener_pedidos_nube():
