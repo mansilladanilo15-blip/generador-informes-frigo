@@ -73,7 +73,10 @@ def mostrar_gestion_pedidos():
         crear = st.form_submit_button("➕ Crear Pedido", type="primary")
         
         if crear and nuevo_nro:
-            pedido_id = f"{nuevo_nro}_{uuid.uuid4().hex[:4]}"
+            # 🔥 Generamos un UUID real para la base de datos
+pedido_id = str(uuid.uuid4())
+# 🔥 Guardamos tu código personalizado dentro de los datos
+codigo_pedido = f"{nuevo_nro}_{uuid.uuid4().hex[:4]}"
             if tipo_pedido == "Traslado":
                 datos = {"id": pedido_id, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro, "cliente": nuevo_destino, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
             else:
