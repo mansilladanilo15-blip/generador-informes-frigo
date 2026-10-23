@@ -86,7 +86,7 @@ if pedido:
         st.markdown(f'<div style="text-align:center;"><img src="data:image/jpeg;base64,{b64}" style="width:100%; border-radius:6px; margin-bottom:8px;"><div style="font-size:12px; color:#666;">{caption}</div></div>', unsafe_allow_html=True)
 
     # 0. DOCUMENTACIÓN
-    fotos_doc = nube.obtener_fotos_nube(f"pedido_id")
+    fotos_doc = nube.obtener_fotos_nube(pedido_id)
     fotos_doc = [f for f in fotos_doc if f.startswith("documentacion_")]
     
     with st.expander(f"📄 0. Documentación ({len(fotos_doc)})", expanded=True):
@@ -135,7 +135,6 @@ if pedido:
                 
                 if nombre_pata not in fotos_estibas:
                     if st.button(f"❌ Eliminar Pata {i}", key=f"del_pata_{i}"):
-                        st.session_state["cantidad_patas"] -= 1
                         st.rerun()
                 if nombre_pata in fotos_estibas:
                     bytes_img = nube.descargar_foto_nube(pedido_id, nombre_pata)
@@ -168,63 +167,39 @@ if pedido:
 
     # OTRAS CATEGORÍAS
     st.markdown("### 📸 Otras Categorías")
-    
-def mostrar_otras_categorias(titulo, categoria):
-    fotos_existentes = nube.obtener_fotos_nube(pedido_id)
-    fotos_existentes = [f for f in fotos_existentes if f.startswith(f"{categoria}_")]
-    cantidad_fotos = len(fotos_existentes)
-    
-    titulo_con_contador = f"{titulo} ({cantidad_fotos})"
-    
-    with st.expander(titulo_con_contador, expanded=False):
-        if fotos_existentes:
-            cols = st.columns(3)
-            for idx, f in enumerate(fotos_existentes):
-                with cols[idx % 3]:
-                    bytes_img = nube.descargar_foto_nube(pedido_id, f)
-                    mostrar_imagen_nube(bytes_img, f)
-                    if st.button(f"🗑️ Borrar", key=f"del_{categoria}_{f}", use_container_width=True):
-                        nube.borrar_foto_nube(pedido_id, f)
-                        st.rerun()
-        
-        tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
-        
-        with tab1:
-            subidas = st.file_uploader("Subir fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_{categoria}_{pedido_id}")
-            if subidas:
-                # 🔥 CANDADO DE SEGURIDAD PARA EVITAR DUPLICADOS
-                if "procesados" not in st.session_state:
-                    st.session_state["procesados"] = {}
-
-                hubo_nuevas = False
-                for s in subidas:
-                    # Creamos un ID único con el nombre y el tamaño del archivo
-                    file_id = f"{pedido_id}_{categoria}_{s.name}_{s.size}"
-                    
-                    if file_id not in st.session_state["procesados"]:
-                        nombre = f"{categoria}_{uuid.uuid4().hex[:6]}.jpg"
-                        nube.subir_foto_nube(pedido_id, nombre, s.getbuffer())
-                        st.session_state["procesados"][file_id] = True
-                        hubo_nuevas = True
-                
-                if hubo_nuevas:
-                    time.sleep(1)
+    def mostrar_categoria(titulo, prefijo):
+        fotos = nube.obtener_fotos_nube(pedido_id)
+        fotos = [f for f in fotos if f.startswith(prefijo)]
+        with st.expander(f"{titulo} ({len(fotos)})", expanded=False):
+            if fotos:
+                cols = st.columns(3)
+                for idx, f in enumerate(fotos):
+                    with cols[idx % 3]:
+                        bytes_img = nube.descargar_foto_nube(pedido_id, f)
+                        mostrar_imagen_nube(bytes_img, f)
+                        if st.button(f"🗑️ Borrar", key=f"del_{f}", use_container_width=True):
+                            nube.borrar_foto_nube(pedido_id, f)
+                            st.rerun()
+            
+            tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
+            with tab1:
+                subidas = st.file_uploader("Subir fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_{prefijo}")
+                if subidas:
+                    for s in subidas:
+                        file_id = f"{pedido_id}_{prefijo}_{s.name}_{s.size}"
+                        if file_id not in st.session_state["procesados"]:
+                            nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
+                            nube.subir_foto_nube(pedido_id, nombre, s.getbuffer())
+                            st.session_state["procesados"][file_id] = True
                     st.rerun()
-                    
-        with tab2:
-            cam = st.camera_input("Tomar foto", key=f"cam_{categoria}_{uuid.uuid4().hex[:6]}")
-            if cam:
-                # Para la cámara, usamos un ID basado en el contenido para evitar duplicados
-                file_id = f"{pedido_id}_{categoria}_cam_{cam.name}_{len(cam.getvalue())}"
-                if file_id not in st.session_state["procesados"]:
-                    nombre = f"{categoria}_{uuid.uuid4().hex[:6]}.jpg"
+            with tab2:
+                cam = st.camera_input("Tomar foto", key=f"cam_{prefijo}_{uuid.uuid4().hex[:6]}")
+                if cam:
+                    nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
                     nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
-                    st.session_state["procesados"][file_id] = True
-                    time.sleep(1)
                     st.rerun()
 
-# Llamadas a la función al final del archivo
-mostrar_otras_categorias("2. Fotos Camión", "camion")
-mostrar_otras_categorias("3. Fotos Termógrafo", "termografo")
-mostrar_otras_categorias("4. Fotos Sellos", "sello")
-mostrar_otras_categorias("5. Fotos Thermo-king", "thermoking")
+    mostrar_categoria("2. Fotos Camión", "camion_")
+    mostrar_categoria("3. Termógrafo", "termografo_")
+    mostrar_categoria("4. Sellos", "sello_")
+    mostrar_categoria("5. Thermo-king", "thermoking_")
