@@ -1,7 +1,10 @@
 streamlit
 pandas
 Pillow
+pdfkit
 weasyprint
-pytesseract
 supabase
-st-supabase-connection
+requests
+paddleocr
+paddlepaddle
+opencv-python-headless
