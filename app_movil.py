@@ -168,6 +168,7 @@ if pedido:
 
     # OTRAS CATEGORÍAS
     st.markdown("### 📸 Otras Categorías")
+    
     def mostrar_otras_categorias(titulo, categoria):
     fotos_existentes = nube.obtener_fotos_nube(pedido_id)
     fotos_existentes = [f for f in fotos_existentes if f.startswith(f"{categoria}_")]
