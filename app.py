@@ -287,7 +287,7 @@ if pedido_actual:
                     nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
                 st.rerun()
 
-        with st.expander("1. Estibas", expanded=True):
+    with st.expander("1. Estibas", expanded=True):
         estibas = [x for x in fotos if x.startswith("estiba_pata_")]
         
         # --- 1. SUBIDA MANUAL (El primer paso lógico) ---
