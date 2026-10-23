@@ -1,384 +1,231 @@
 import streamlit as st
-import pandas as pd
-from datetime import date, datetime
-import base64
-from io import BytesIO
-from PIL import Image, ImageOps
 import uuid
+import base64
 import time
 import conexion_nube as nube
 
-import config
-from generador import generar_informe
+st.set_page_config(page_title="App Operarios", page_icon="🚚", layout="centered")
 
-st.set_page_config(page_title="Generador de Informes", page_icon="📄", layout="wide")
+if "auto_refresh" not in st.session_state:
+    st.session_state["auto_refresh"] = True
 
-if "reinicio_count" not in st.session_state:
-    st.session_state["reinicio_count"] = 0
-RC = st.session_state["reinicio_count"]
+# 🔥 Auto-refresh inteligente: solo si NO hay fotos recién subidas
+if st.session_state["auto_refresh"] and not st.session_state.get("procesados"):
+    st.markdown("""<script>setTimeout(function(){window.location.reload();}, 30000);</script>""", unsafe_allow_html=True)
 
-st.title("📄 Generador de Informes de Pedidos y Traslados")
-
-def convertir_a_base64(bytes_imagen, max_ancho=800):
-    try:
-        img = Image.open(BytesIO(bytes_imagen))
-        img = ImageOps.exif_transpose(img)
-        if img.width > max_ancho:
-            ratio = max_ancho / img.width
-            img = img.resize((max_ancho, int(img.height * ratio)))
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
-        buffer = BytesIO()
-        img.save(buffer, format="JPEG", quality=85)
-        return f"data:image/jpeg;base64,{base64.b64encode(buffer.getvalue()).decode('utf-8')}"
-    except:
-        return None
-
-@st.dialog("🔍 Vista ampliada", width="large")
-def mostrar_zoom(nombre_foto, bytes_foto):
-    b64 = convertir_a_base64(bytes_foto, max_ancho=1600)
-    if b64:
-        st.markdown(f'<div style="text-align:center;"><img src="{b64}" style="max-width:100%; max-height:70vh; border:1px solid #ddd; border-radius:8px;"></div>', unsafe_allow_html=True)
-        st.caption(f"📸 {nombre_foto}")
-    if st.button("❌ Cerrar", width="stretch", key="close_modal"):
+col_titulo, col_boton = st.columns([4, 1])
+with col_titulo:
+    st.title("📱 App de Operarios")
+with col_boton:
+    if st.button("🔄 Recargar", width="stretch"):
         st.rerun()
-
-def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
-    if not fotos: return
-    cols = st.columns(cols_num)
-    for i, f in enumerate(fotos):
-        with cols[i % cols_num]:
-            bytes_img = nube.descargar_foto_nube(pedido_id, f)
-            b64 = convertir_a_base64(bytes_img, max_ancho=400)
-            if b64:
-                st.markdown(f'<img src="{b64}" style="width:100%; border:1px solid #ddd; border-radius:6px; margin-bottom:6px;">', unsafe_allow_html=True)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🔍 Ver", key=f"{key}_zoom_{i}_{RC}", width="stretch"):
-                    mostrar_zoom(f, bytes_img)
-            with col2:
-                if st.button("🗑️ Borrar", key=f"{key}_del_{i}_{RC}", width="stretch"):
-                    nube.borrar_foto_nube(pedido_id, f)
-                    st.success("Foto eliminada.")
-                    time.sleep(1.5)
-                    st.rerun()
-            
-            opciones = ["Mantener aquí", "Mover a Documentación", "Mover a Camión", "Mover a Termógrafo", "Mover a Sello", "Mover a Thermo-king"]
-            opciones_filtradas = [op for op in opciones if op != f"Mover a {key.capitalize()}"]
-            destino = st.selectbox("Mover foto a:", opciones_filtradas, key=f"derivar_{key}_{i}_{RC}", label_visibility="collapsed")
-            
-            if destino != "Mantener aquí":
-                if st.button("➡️ Confirmar", key=f"btn_mover_{key}_{i}_{RC}", width="stretch"):
-                    prefijo = {"Mover a Documentación": "documentacion_", "Mover a Camión": "camion_", "Mover a Termógrafo": "termografo_", "Mover a Sello": "sello_", "Mover a Thermo-king": "thermoking_"}[destino]
-                    nuevo_nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
-                    
-                    bytes_foto = nube.descargar_foto_nube(pedido_id, f)
-                    nube.subir_foto_nube(pedido_id, nuevo_nombre, bytes_foto)
-                    nube.borrar_foto_nube(pedido_id, f)
-                    
-                    st.success(f"Foto movida a {destino}.")
-                    time.sleep(1.5)
-                    st.rerun()
-
-def val(key, default=""):
-    ultimo_cargado = st.session_state.get("cargar_ultimo", {})
-    v = ultimo_cargado.get(key, default)
-    return default if v == "-" or v is None else v
-
-# ============ GESTIÓN DE PEDIDOS ============
-def mostrar_gestion_pedidos():
-    st.subheader("📋 Gestión de Pedidos")
-    tipo_pedido = st.radio("Selecciona el tipo:", ["Pedido de venta", "Traslado"], horizontal=True)
-    st.divider()
-
-    with st.form("crear_pedido"):
-        col1, col2 = st.columns(2)
-        if tipo_pedido == "Traslado":
-            with col1:
-                nuevo_nro = st.text_input("N° de Entrega *")
-                nuevo_destino = st.text_input("Destino *")
-            with col2:
-                nuevo_transporte = st.text_input("Transporte (Opcional)")
-        else:
-            with col1:
-                nuevo_nro = st.text_input("N° Pedido *")
-                nuevo_cliente = st.text_input("Cliente *")
-            with col2:
-                nuevo_transporte = st.text_input("Transporte (Opcional)")
-                nuevo_nro_entrega = st.text_input("N° de Entrega (Opcional)")
-
-        crear = st.form_submit_button("➕ Crear Pedido", type="primary")
-        
-        if crear and nuevo_nro:
-            pedido_id = str(uuid.uuid4())
-            codigo_pedido = f"{nuevo_nro}_{uuid.uuid4().hex[:4]}"
-            
-            if tipo_pedido == "Traslado":
-                datos = {"id": pedido_id, "codigo_pedido": codigo_pedido, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro, "cliente": nuevo_destino, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
-            else:
-                datos = {"id": pedido_id, "codigo_pedido": codigo_pedido, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro_entrega or "-", "cliente": nuevo_cliente, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
-            
-            nube.subir_pedido_nube(pedido_id, datos)
-            st.success("✅ Pedido creado.")
-            st.rerun()
-
-    st.divider()
-    st.markdown("**Pedidos Existentes**")
-    pedidos = nube.obtener_pedidos_nube()
-    
-    if pedidos:
-        for p in pedidos:
-            fotos = nube.obtener_fotos_nube(p['id'])
-            estado_mostrar = f"🟢 {p.get('estado')} ({len(fotos)} fotos)" if len(fotos) > 0 else "🟡 Sin fotos"
-            col_a, col_b, col_c, col_d = st.columns([4, 2, 1, 1])
-            with col_a: st.write(f"**{p['nro_pedido']}** - {p['cliente']} ({p['tipo']})")
-            with col_b: st.write(estado_mostrar)
-            
-            with col_c:
-                if st.button("👁️", key=f"ver_{p['id']}", width="stretch"):
-                    st.session_state["cargar_ultimo"] = p
-                    st.session_state["pedido_actual_id"] = p["id"]
-                    st.session_state["forzar_modo_informe"] = True
-                    st.rerun()
-            
-            with col_d:
-                if st.button("🗑️", key=f"del_{p['id']}", width="stretch"):
-                    nube.borrar_pedido_nube(p['id'])
-                    st.success("Pedido eliminado.")
-                    time.sleep(1.5)
-                    st.rerun()
-
-# ============ ENRUTADOR ============
-if st.session_state.get("forzar_modo_informe", False):
-    st.session_state["selector_modo"] = "📄 Generar Informe"
-    st.session_state["forzar_modo_informe"] = False
-    st.session_state["reinicio_count"] += 1 
-    st.rerun()
-
-modo = st.radio("Modo:", ["📄 Generar Informe", "📋 Gestión de Pedidos"], horizontal=True, key="selector_modo")
-
-if modo == "📋 Gestión de Pedidos":
-    mostrar_gestion_pedidos()
-    st.stop()
-
-# ============ MODO INFORME ============
-pedido_actual = st.session_state.get("pedido_actual_id", "")
-bloqueado = False
-if pedido_actual:
-    pedidos_nube = nube.obtener_pedidos_nube()
-    for p in pedidos_nube:
-        if p['id'] == pedido_actual:
-            bloqueado = (p.get('estado') == 'Finalizado')
 
 with st.sidebar:
-    if st.button("🧹 Reiniciar app", width="stretch"):
-        st.session_state.clear()
+    st.subheader("⚙️ Opciones")
+    auto_recarga = st.toggle("Auto-recargar", value=st.session_state["auto_refresh"])
+    if auto_recarga != st.session_state["auto_refresh"]:
+        st.session_state["auto_refresh"] = auto_recarga
         st.rerun()
 
-st.subheader("📋 Datos generales")
-if bloqueado: st.warning("🔒 Pedido FINALIZADO.")
+todos_los_pedidos = nube.obtener_pedidos_nube()
 
-with st.form("datos"):
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        empresa = st.text_input("Empresa", value=val("empresa", "Australis Mar SA"), disabled=bloqueado)
-        tipo_informe = st.selectbox("Tipo", ["Pedido de venta", "Traslado"], index=0 if val("tipo_informe", "Pedido de venta") == "Pedido de venta" else 1, disabled=bloqueado)
-        nro_pedido = st.text_input("N° Pedido", value=val("nro_pedido", ""), disabled=bloqueado)
-    with c2:
-        fecha = st.date_input("Fecha", value=date.today(), disabled=bloqueado)
-        origen = st.text_input("Origen", value=val("origen", "Planta Dumestre"), disabled=bloqueado)
-        cliente = st.text_input("Cliente", value=val("cliente", ""), disabled=bloqueado)
-    with c3:
-        nro_entrega = st.text_input("N° Entrega", value=val("nro_entrega", ""), disabled=bloqueado)
-        guia_despacho = st.text_input("Guía Despacho", value=val("guia_despacho", ""), disabled=bloqueado)
+if not todos_los_pedidos:
+    st.warning("⚠️ No hay pedidos creados en la nube.")
+    st.stop()
 
-    st.subheader("🚛 Transporte")
-    t1, t2 = st.columns(2)
-    with t1:
-        transporte = st.text_input("Transporte", value=val("transporte", ""), disabled=bloqueado)
-        patente_camion = st.text_input("Patente Camión", value=val("patente_camion", ""), disabled=bloqueado)
-        sello_final = st.text_input("Sello Final", value=val("sello_final", ""), disabled=bloqueado)
-    with t2:
-        chofer = st.text_input("Chofer", value=val("chofer", ""), disabled=bloqueado)
-        patente_rampla = st.text_input("Patente Rampla", value=val("patente_rampla", ""), disabled=bloqueado)
-        sellos_provisorios = st.text_input("Sellos Provisorios", value=val("sellos_provisorios", ""), disabled=bloqueado)
-    nro_termografo = st.text_input("N° Termógrafo", value=val("nro_termografo", ""), disabled=bloqueado)
+pendientes = [p for p in todos_los_pedidos if p.get("estado") != "Finalizado"]
+finalizados = [p for p in todos_los_pedidos if p.get("estado") == "Finalizado"]
 
-    if not bloqueado:
-        if st.form_submit_button("💾 Guardar datos", width="stretch"):
-            if pedido_actual:
-                pedidos = nube.obtener_pedidos_nube()
-                for p in pedidos:
-                    if p['id'] == pedido_actual:
-                        p.update({"nro_entrega": nro_entrega, "transporte": transporte, "cliente": cliente, "nro_pedido": nro_pedido, "guia_despacho": guia_despacho, "chofer": chofer, "patente_camion": patente_camion, "patente_rampla": patente_rampla, "sello_final": sello_final, "sellos_provisorios": sellos_provisorios, "nro_termografo": nro_termografo})
-                        nube.subir_pedido_nube(pedido_actual, p)
-                        st.success("Guardado.")
-                        st.rerun()
+st.subheader("🟡 Pedidos Pendientes")
 
-st.subheader("📷 Fotos")
-if pedido_actual:
-    fotos = nube.obtener_fotos_nube(pedido_actual)
-    
-    with st.expander("0. Documentación", expanded=False):
-        docs = [x for x in fotos if x.startswith("documentacion_")]
-        if docs:
-            renderizar_galeria("documentacion", docs, pedido_actual, cols_num=4)
-        else:
-            st.info("No hay documentación.")
-        
-        if not bloqueado:
-            st.markdown("**Subir fotos manualmente:**")
-            nuevas = st.file_uploader("Subir documentación", type=["jpg", "png"], accept_multiple_files=True, key=f"up_doc_{RC}")
-            if nuevas:
-                for f in nuevas:
-                    nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
-                    nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
-                st.rerun()
+if pendientes:
+    opciones_pendientes = {f"{p['nro_pedido']} - {p['cliente']}": p for p in pendientes}
+    pedido_seleccionado = st.selectbox("Selecciona un pedido:", list(opciones_pendientes.keys()))
+    pedido = opciones_pendientes[pedido_seleccionado]
+else:
+    st.success("🎉 ¡No hay pedidos pendientes!")
+    pedido = None
 
-    with st.expander("1. Estibas", expanded=True):
-        estibas = [x for x in fotos if x.startswith("estiba_pata_")]
-        if estibas:
-            st.markdown("### 📋 Resumen de Patas")
-            df_estibas = pd.DataFrame([{"Pata": f.split("_")[2].replace(".jpg", ""), "Archivo": f} for f in estibas])
-            st.dataframe(df_estibas, width="stretch")
-            
-            if not bloqueado:
-                if st.button("🔍 Analizar con OCR", type="secondary", key=f"btn_ocr_{RC}"):
-                    with st.spinner("Analizando fotos con OCR... ⏳"):
-                        try:
-                            from ocr_bridge import analizar_fotos
-                            fotos_para_ocr = []
-                            for f in estibas:
-                                b = nube.descargar_foto_nube(pedido_actual, f)
-                                fotos_para_ocr.append((f, b))
-                            
-                            resultados = analizar_fotos(fotos_para_ocr)
-                            
-                            # 🔥 DIAGNÓSTICO
-                            with st.expander("👁️ Ver texto detectado por el OCR (Diagnóstico)", expanded=True):
-                                for r in resultados:
-                                    st.write(f"**{r['archivo']}**")
-                                    st.code(r.get('texto_crudo', 'Nada'))
-                            
-                            data = []
-                            for r in resultados:
-                                data.append({
-                                    "Archivo": r["archivo"],
-                                    "Pata OCR": r.get("pata", "-"),
-                                    "Pata Final (Editable)": r.get("pata", 1),
-                                    "Cajas": r.get("total_cajas", 0)
-                                })
-                            df_ocr = pd.DataFrame(data)
-                            st.session_state[f"ocr_result_{pedido_actual}"] = df_ocr
-                        except Exception as e:
-                            st.error(f"Error en OCR: {e}")
-                
-            if f"ocr_result_{pedido_actual}" in st.session_state:
-                st.markdown("### ✏️ Revisión Pata / Caja")
-                df_editado = st.data_editor(
-                    st.session_state[f"ocr_result_{pedido_actual}"],
-                    width="stretch",
-                    disabled=bloqueado
-                )
-                st.session_state[f"ocr_result_{pedido_actual}"] = df_editado
-                
-                col_tabla, col_preview = st.columns([2, 1])
-                with col_tabla:
-                    st.info("Edita las cajas si es necesario. El OCR ha detectado las patas.")
-                with col_preview:
-                    archivo_sel = st.selectbox("Ver foto:", df_editado["Archivo"].tolist(), key=f"sel_ocr_{RC}")
-                    if archivo_sel:
-                        b = nube.descargar_foto_nube(pedido_actual, archivo_sel)
-                        b64 = convertir_a_base64(b, 600)
-                        st.markdown(f'<img src="{b64}" style="width:100%">', unsafe_allow_html=True)
-
-        if not bloqueado:
-            st.markdown("---")
-            st.markdown("### 📤 Subida Manual de Estibas (El OCR asignará las patas)")
-            fotos_manuales = st.file_uploader("Sube todas las fotos aquí", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
-            
-            if fotos_manuales:
-                if st.button("🚀 Procesar con OCR y Guardar", type="primary", width="stretch"):
-                    with st.spinner("El OCR está leyendo los carteles... ⏳"):
-                        try:
-                            from ocr_bridge import analizar_fotos
-                            fotos_para_ocr = [(f.name, f.getvalue()) for f in fotos_manuales]
-                            resultados = analizar_fotos(fotos_para_ocr)
-                            
-                            # 🔥 DIAGNÓSTICO DENTRO DE LA SUBIDA MASIVA
-                            st.markdown("#### 👁️ Diagnóstico de lectura")
-                            for r in resultados:
-                                st.write(f"**{r['archivo']}** → Pata: `{r.get('pata', 'No')}` | Texto: `{r.get('texto_crudo', 'Nada')[:60]}...`")
-                            
-                            mapa_bytes = {f.name: f.getvalue() for f in fotos_manuales}
-                            patas_guardadas = 0
-                            errores = []
-                            
-                            for r in resultados:
-                                nombre_original = r["archivo"]
-                                pata_detectada = r.get("pata")
-                                
-                                if pata_detectada and nombre_original in mapa_bytes:
-                                    nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
-                                    nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
-                                    patas_guardadas += 1
-                                else:
-                                    nuevo_nombre = f"estiba_pata_99.jpg"
-                                    nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
-                                    errores.append(nombre_original)
-                            
-                            if errores:
-                                st.warning(f"⚠️ Se guardaron {patas_guardadas} fotos con pata detectada. Estas fotos no se pudieron asignar (se guardaron como Pata 99): {', '.join(errores)}")
-                            else:
-                                st.success(f"✅ Se guardaron {patas_guardadas} fotos correctamente.")
-                            
-                            time.sleep(2)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Error al procesar: {e}")
-
-    def seccion_extra(titulo, prefijo):
-        with st.expander(titulo, expanded=False):
-            items = [x for x in fotos if x.startswith(prefijo)]
-            if items:
-                renderizar_galeria(prefijo, items, pedido_actual, cols_num=4)
-            else:
-                st.info("No hay fotos.")
-            
-            if not bloqueado:
-                st.markdown("**Subir fotos manualmente:**")
-                nuevas = st.file_uploader(f"Subir fotos ({titulo})", type=["jpg", "png"], accept_multiple_files=True, key=f"up_{prefijo}_{RC}")
-                if nuevas:
-                    for f in nuevas:
-                        nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
-                        nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
-                    st.rerun()
-
-    seccion_extra("2. Camión", "camion_")
-    seccion_extra("3. Termógrafo", "termografo_")
-    seccion_extra("4. Sellos", "sello_")
-    seccion_extra("5. Thermo-king", "thermoking_")
+with st.expander("📂 Historial de Finalizados", expanded=False):
+    if finalizados:
+        for p in finalizados:
+            st.write(f"🔒 {p['nro_pedido']} - {p['cliente']}")
+    else:
+        st.info("Aún no hay finalizados.")
 
 st.divider()
-c1, c2 = st.columns(2)
-with c1:
-    if st.button("🚀 Generar PDF", type="primary", width="stretch"):
-        st.success("Función PDF en construcción para la nube.")
-with c2:
-    if pedido_actual and not bloqueado:
-        if st.button("✅ Finalizar Pedido", width="stretch"):
-            pedidos = nube.obtener_pedidos_nube()
-            for p in pedidos:
-                if p['id'] == pedido_actual:
-                    p['estado'] = "Finalizado"
-                    nube.subir_pedido_nube(pedido_actual, p)
+
+if pedido:
+    if pedido.get("estado") == "Finalizado":
+        st.success("🔒 **ESTE PEDIDO HA SIDO FINALIZADO**")
+        st.stop()
+
+    if pedido.get("tipo") == "Traslado":
+        titulo_cartel = f"🚚 Traslado: {pedido.get('nro_entrega', pedido['nro_pedido'])}"
+        subtitulo_cartel = f"Destino: {pedido['cliente']}"
+    else:
+        titulo_cartel = f"📦 Pedido: {pedido['nro_pedido']}"
+        subtitulo_cartel = f"Entrega: {pedido.get('nro_entrega', '-')} | Cliente: {pedido['cliente']}"
+
+    st.markdown(f"""
+        <div style="background-color: #1a4d8f; padding: 20px; border-radius: 10px; color: white; text-align: center; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: white; font-size: 24px;">{titulo_cartel}</h2>
+            <h3 style="margin: 10px 0 0 0; color: #e0e0e0; font-size: 18px;">{subtitulo_cartel}</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+    pedido_id = pedido['id']
+
+    if "procesados" not in st.session_state:
+        st.session_state["procesados"] = {}
+
+    def mostrar_imagen_nube(bytes_img, caption):
+        b64 = base64.b64encode(bytes_img).decode("utf-8")
+        st.markdown(f'<div style="text-align:center;"><img src="data:image/jpeg;base64,{b64}" style="width:100%; border-radius:6px; margin-bottom:8px;"><div style="font-size:12px; color:#666;">{caption}</div></div>', unsafe_allow_html=True)
+
+    # 0. DOCUMENTACIÓN
+    fotos_doc = nube.obtener_fotos_nube(pedido_id)
+    fotos_doc = [f for f in fotos_doc if f.startswith("documentacion_")]
+
+    with st.expander(f"📄 0. Documentación ({len(fotos_doc)})", expanded=True):
+        tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
+        with tab1:
+            subidas = st.file_uploader("Subir documentación", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_doc_{pedido_id}")
+            if subidas:
+                for foto in subidas:
+                    if f"{pedido_id}_doc_{foto.name}" not in st.session_state["procesados"]:
+                        nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
+                        nube.subir_foto_nube(pedido_id, nombre, foto.getbuffer())
+                        st.session_state["procesados"][f"{pedido_id}_doc_{foto.name}"] = True
+                st.toast("✅ Documentación subida")
+                time.sleep(1)
+                st.rerun()
+        with tab2:
+            cam = st.camera_input("Tomar foto", key=f"cam_doc_{pedido_id}_{uuid.uuid4().hex[:6]}")
+            if cam:
+                nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
+                nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
+                st.toast("✅ Foto de documentación guardada")
+                time.sleep(1)
+                st.rerun()
+
+        if fotos_doc:
+            cols = st.columns(3)
+            for idx, f in enumerate(fotos_doc):
+                with cols[idx % 3]:
+                    bytes_img = nube.descargar_foto_nube(pedido_id, f)
+                    mostrar_imagen_nube(bytes_img, f)
+                    if st.button(f"🗑️ Borrar", key=f"del_doc_{f}", width="stretch"):
+                        nube.borrar_foto_nube(pedido_id, f)
+                        st.toast("🗑️ Foto borrada")
+                        time.sleep(0.5)
+                        st.rerun()
+
+    st.divider()
+
+    # 1. ESTIBAS
+    fotos_estibas = nube.obtener_fotos_nube(pedido_id)
+    fotos_estibas = [f for f in fotos_estibas if f.startswith("estiba_pata_")]
+
+    # 🔥 FIX: contar patas extra del session_state
+    patas_extra_key = f"patas_extra_{pedido_id}"
+    if patas_extra_key not in st.session_state:
+        st.session_state[patas_extra_key] = 0
+
+    cantidad_patas = len(fotos_estibas) + 1 + st.session_state[patas_extra_key]
+
+    if "expand_estibas" not in st.session_state:
+        st.session_state["expand_estibas"] = True
+
+    with st.expander(f"📦 1. Estibas ({len(fotos_estibas)})", expanded=st.session_state["expand_estibas"]):
+        for i in range(1, cantidad_patas + 1):
+            nombre_pata = f"estiba_pata_{i}.jpg"
+            with st.container(border=True):
+                st.markdown(f"#### 📦 Pata {i}")
+
+                if nombre_pata in fotos_estibas:
+                    bytes_img = nube.descargar_foto_nube(pedido_id, nombre_pata)
+                    st.success("✅ Foto registrada")
+                    mostrar_imagen_nube(bytes_img, f"Pata {i}")
+                    if st.button(f"🗑️ Borrar Pata {i}", key=f"del_foto_{i}"):
+                        nube.borrar_foto_nube(pedido_id, nombre_pata)
+                        st.toast(f"🗑️ Pata {i} borrada")
+                        time.sleep(0.5)
+                        st.rerun()
+                else:
+                    tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
+                    with tab1:
+                        subida = st.file_uploader("Subir", type=["jpg", "png"], key=f"gal_pata_{i}")
+                        if subida:
+                            nube.subir_foto_nube(pedido_id, nombre_pata, subida.getbuffer())
+                            st.session_state["expand_estibas"] = True
+                            st.toast(f"✅ Pata {i} guardada")
+                            time.sleep(1)
+                            st.rerun()
+                    with tab2:
+                        cam = st.camera_input("Tomar foto", key=f"cam_pata_{i}_{uuid.uuid4().hex[:6]}")
+                        if cam:
+                            nube.subir_foto_nube(pedido_id, nombre_pata, cam.getbuffer())
+                            st.session_state["expand_estibas"] = True
+                            st.toast(f"✅ Pata {i} guardada")
+                            time.sleep(1)
+                            st.rerun()
+
+        # 🔥 FIX: botón Agregar Pata ahora SÍ incrementa el contador
+        if st.button("➕ Agregar Pata", type="secondary", width="stretch"):
+            st.session_state[patas_extra_key] += 1
+            st.rerun()
+
+        # 🔥 FIX: botón para quitar la última pata vacía
+        if st.session_state[patas_extra_key] > 0:
+            if st.button("➖ Quitar última Pata vacía", type="secondary", width="stretch"):
+                st.session_state[patas_extra_key] -= 1
+                st.rerun()
+
+    st.divider()
+
+    # OTRAS CATEGORÍAS
+    st.markdown("### 📸 Otras Categorías")
+
+    def mostrar_categoria(titulo, prefijo):
+        fotos = nube.obtener_fotos_nube(pedido_id)
+        fotos = [f for f in fotos if f.startswith(prefijo)]
+        with st.expander(f"{titulo} ({len(fotos)})", expanded=False):
+            if fotos:
+                cols = st.columns(3)
+                for idx, f in enumerate(fotos):
+                    with cols[idx % 3]:
+                        bytes_img = nube.descargar_foto_nube(pedido_id, f)
+                        mostrar_imagen_nube(bytes_img, f)
+                        if st.button(f"🗑️ Borrar", key=f"del_{f}", width="stretch"):
+                            nube.borrar_foto_nube(pedido_id, f)
+                            st.toast("🗑️ Foto borrada")
+                            time.sleep(0.5)
+                            st.rerun()
+
+            tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
+            with tab1:
+                subidas = st.file_uploader("Subir fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_{prefijo}")
+                if subidas:
+                    for s in subidas:
+                        file_id = f"{pedido_id}_{prefijo}_{s.name}_{s.size}"
+                        if file_id not in st.session_state["procesados"]:
+                            nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
+                            nube.subir_foto_nube(pedido_id, nombre, s.getbuffer())
+                            st.session_state["procesados"][file_id] = True
+                    st.toast("✅ Fotos subidas")
+                    time.sleep(1)
                     st.rerun()
-    elif pedido_actual and bloqueado:
-        if st.button("🔓 Reabrir Pedido", type="primary", width="stretch"):
-            pedidos = nube.obtener_pedidos_nube()
-            for p in pedidos:
-                if p['id'] == pedido_actual:
-                    p['estado'] = "Pendiente de fotos"
-                    nube.subir_pedido_nube(pedido_actual, p)
+            with tab2:
+                cam = st.camera_input("Tomar foto", key=f"cam_{prefijo}_{uuid.uuid4().hex[:6]}")
+                if cam:
+                    nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
+                    nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
+                    st.toast("✅ Foto guardada")
+                    time.sleep(1)
                     st.rerun()
+
+    mostrar_categoria("2. Fotos Camión", "camion_")
+    mostrar_categoria("3. Termógrafo", "termografo_")
+    mostrar_categoria("4. Sellos", "sello_")
+    mostrar_categoria("5. Thermo-king", "thermoking_")
