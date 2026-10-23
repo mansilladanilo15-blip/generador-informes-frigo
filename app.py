@@ -283,7 +283,7 @@ if pedido_actual:
     with st.expander("1. Estibas", expanded=True):
         estibas = [x for x in fotos if x.startswith("estiba_pata_") and x not in st.session_state["fotos_ocultas"]]
         
-                    if not bloqueado:
+        if not bloqueado:
             # 🔥 BOTÓN DE EMERGENCIA PARA LIMPIAR TODO
         if estibas:
                 with st.expander("🧨 Zona de Peligro (Limpiar todas las estibas)"):
