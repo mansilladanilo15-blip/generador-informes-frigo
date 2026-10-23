@@ -43,7 +43,6 @@ def mostrar_zoom(nombre_foto, bytes_foto):
     if st.button("❌ Cerrar", use_container_width=True, key="close_modal"):
         st.rerun()
 
-# 🔥 FUNCIÓN DE GALERÍA CORREGIDA (CON DERIVACIÓN Y BORRADO)
 def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
     if not fotos: return
     cols = st.columns(cols_num)
@@ -60,39 +59,27 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
                     mostrar_zoom(f, bytes_img)
             with col2:
                 if st.button("🗑️ Borrar", key=f"{key}_del_{i}_{RC}", use_container_width=True):
+                    # 🔥 BORRAR Y FORZAR RECARGA
                     nube.borrar_foto_nube(pedido_id, f)
                     st.success("Foto eliminada.")
-                    time.sleep(1)
+                    time.sleep(1.5) # Esperamos a que Supabase procese el borrado
                     st.rerun()
             
-            # SELECTOR PARA DERIVAR
             opciones = ["Mantener aquí", "Mover a Documentación", "Mover a Camión", "Mover a Termógrafo", "Mover a Sello", "Mover a Thermo-king"]
-            # Filtramos para no mover a la misma categoría
             opciones_filtradas = [op for op in opciones if op != f"Mover a {key.capitalize()}"]
-            
             destino = st.selectbox("Mover foto a:", opciones_filtradas, key=f"derivar_{key}_{i}_{RC}", label_visibility="collapsed")
             
             if destino != "Mantener aquí":
                 if st.button("➡️ Confirmar", key=f"btn_mover_{key}_{i}_{RC}", use_container_width=True):
-                    prefijo = {
-                        "Mover a Documentación": "documentacion_",
-                        "Mover a Camión": "camion_",
-                        "Mover a Termógrafo": "termografo_",
-                        "Mover a Sello": "sello_",
-                        "Mover a Thermo-king": "thermoking_"
-                    }[destino]
-                    
+                    prefijo = {"Mover a Documentación": "documentacion_", "Mover a Camión": "camion_", "Mover a Termógrafo": "termografo_", "Mover a Sello": "sello_", "Mover a Thermo-king": "thermoking_"}[destino]
                     nuevo_nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
                     
-                    # 1. Descargar de Supabase
                     bytes_foto = nube.descargar_foto_nube(pedido_id, f)
-                    # 2. Subir con el nuevo nombre
                     nube.subir_foto_nube(pedido_id, nuevo_nombre, bytes_foto)
-                    # 3. Borrar la original
-                    nube.borrar_foto_nube(pedido_id, f)
+                    nube.borrar_foto_nube(pedido_id, f) # Borra la original
                     
                     st.success(f"Foto movida a {destino}.")
-                    time.sleep(1)
+                    time.sleep(1.5)
                     st.rerun()
 
 def val(key, default=""):
@@ -160,6 +147,7 @@ def mostrar_gestion_pedidos():
                 if st.button("🗑️", key=f"del_{p['id']}", use_container_width=True):
                     nube.borrar_pedido_nube(p['id'])
                     st.success("Pedido eliminado.")
+                    time.sleep(1.5)
                     st.rerun()
 
 # ============ ENRUTADOR ============
@@ -244,7 +232,7 @@ if pedido_actual:
             st.info("No hay documentación.")
         
         if not bloqueado:
-            st.markdown("**Subir más fotos:**")
+            st.markdown("**Subir fotos manualmente:**")
             nuevas = st.file_uploader("Subir documentación", type=["jpg", "png"], accept_multiple_files=True, key=f"up_doc_{RC}")
             if nuevas:
                 for f in nuevas:
@@ -252,30 +240,96 @@ if pedido_actual:
                     nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
                 st.rerun()
 
-    # 1. Estibas
+    # 1. Estibas (CON OCR)
     with st.expander("1. Estibas", expanded=True):
         estibas = [x for x in fotos if x.startswith("estiba_pata_")]
         if estibas:
-            cols = st.columns(4)
-            for idx, f in enumerate(estibas):
-                with cols[idx % 4]:
-                    b = nube.descargar_foto_nube(pedido_actual, f)
-                    b64 = convertir_a_base64(b, 400)
-                    st.markdown(f'<img src="{b64}" style="width:100%">', unsafe_allow_html=True)
-        
+            # Mostrar tabla resumen
+            st.markdown("### 📋 Resumen de Patas")
+            df_estibas = pd.DataFrame([{"Pata": f.split("_")[2].replace(".jpg", ""), "Archivo": f} for f in estibas])
+            st.dataframe(df_estibas, use_container_width=True)
+            
+            # Botón OCR
+            if not bloqueado:
+                if st.button("🔍 Analizar con OCR", type="secondary", key=f"btn_ocr_{RC}"):
+                    with st.spinner("Analizando fotos con OCR... ⏳"):
+                        try:
+                            from ocr_bridge import analizar_fotos
+                            # Preparamos las fotos para el OCR
+                            fotos_para_ocr = []
+                            for f in estibas:
+                                b = nube.descargar_foto_nube(pedido_actual, f)
+                                fotos_para_ocr.append((f, b))
+                            
+                            resultados = analizar_fotos(fotos_para_ocr)
+                            
+                            # Mostramos los resultados en un editor
+                            data = []
+                            for r in resultados:
+                                data.append({
+                                    "Archivo": r["archivo"],
+                                    "Pata Operario": r.get("pata_operario", "-"),
+                                    "Pata OCR": r.get("pata", "-"),
+                                    "Pata Final (Editable)": r.get("pata", 1),
+                                    "Cajas": r.get("total_cajas", 0)
+                                })
+                            df_ocr = pd.DataFrame(data)
+                            st.session_state[f"ocr_result_{pedido_actual}"] = df_ocr
+                        except Exception as e:
+                            st.error(f"Error en OCR: {e}")
+                
+            # Mostrar editor de resultados si existen
+            if f"ocr_result_{pedido_actual}" in st.session_state:
+                st.markdown("### ✏️ Revisión Pata / Caja")
+                df_editado = st.data_editor(
+                    st.session_state[f"ocr_result_{pedido_actual}"],
+                    use_container_width=True,
+                    disabled=bloqueado
+                )
+                st.session_state[f"ocr_result_{pedido_actual}"] = df_editado
+                
+                # Mostrar vista previa al lado de la tabla
+                col_tabla, col_preview = st.columns([2, 1])
+                with col_tabla:
+                    st.info("Edita las cajas si es necesario. El OCR ha detectado las patas.")
+                with col_preview:
+                    archivo_sel = st.selectbox("Ver foto:", df_editado["Archivo"].tolist(), key=f"sel_ocr_{RC}")
+                    if archivo_sel:
+                        b = nube.descargar_foto_nube(pedido_actual, archivo_sel)
+                        b64 = convertir_a_base64(b, 600)
+                        st.markdown(f'<img src="{b64}" style="width:100%">', unsafe_allow_html=True)
+
+        # Subida manual masiva de estibas
         if not bloqueado:
-            st.markdown("**Subir más fotos (asignar pata):**")
-            c_pata, c_file = st.columns([1, 3])
-            with c_pata:
-                nro_pata = st.number_input("Pata N°", min_value=1, max_value=99, value=1, key=f"nro_pata_manual_{RC}")
-            with c_file:
-                nuevas_est = st.file_uploader("Subir fotos de estiba", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
-                if nuevas_est:
-                    for f in nuevas_est:
-                        nombre = f"estiba_pata_{nro_pata}.jpg"
-                        nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
-                        nro_pata += 1 # Aumenta para la siguiente foto
-                    st.rerun()
+            st.markdown("---")
+            st.markdown("### 📤 Subida Manual de Estibas (El OCR asignará las patas)")
+            fotos_manuales = st.file_uploader("Sube todas las fotos aquí", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
+            
+            if fotos_manuales:
+                if st.button("🚀 Procesar con OCR y Guardar", type="primary", use_container_width=True):
+                    with st.spinner("El OCR está leyendo los carteles... ⏳"):
+                        try:
+                            from ocr_bridge import analizar_fotos
+                            fotos_para_ocr = [(f.name, f.getvalue()) for f in fotos_manuales]
+                            resultados = analizar_fotos(fotos_para_ocr)
+                            
+                            mapa_bytes = {f.name: f.getvalue() for f in fotos_manuales}
+                            patas_guardadas = 0
+                            
+                            for r in resultados:
+                                nombre_original = r["archivo"]
+                                pata_detectada = r.get("pata")
+                                
+                                if pata_detectada and nombre_original in mapa_bytes:
+                                    nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
+                                    nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
+                                    patas_guardadas += 1
+                            
+                            st.success(f"✅ Se guardaron {patas_guardadas} fotos correctamente.")
+                            time.sleep(1.5)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error al procesar: {e}")
 
     # 2, 3, 4, 5
     def seccion_extra(titulo, prefijo):
@@ -287,7 +341,7 @@ if pedido_actual:
                 st.info("No hay fotos.")
             
             if not bloqueado:
-                st.markdown("**Subir más fotos manualmente:**")
+                st.markdown("**Subir fotos manualmente:**")
                 nuevas = st.file_uploader(f"Subir fotos ({titulo})", type=["jpg", "png"], accept_multiple_files=True, key=f"up_{prefijo}_{RC}")
                 if nuevas:
                     for f in nuevas:
