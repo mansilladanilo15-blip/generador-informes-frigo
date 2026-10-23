@@ -104,6 +104,25 @@ def val(key, default=""):
     ultimo_cargado = st.session_state.get("cargar_ultimo", {})
     v = ultimo_cargado.get(key, default)
     return default if v == "-" or v is None else v
+def borrar_fotos_seleccionadas(pedido_id, df, seleccion, prefijo):
+    """Borra de la nube las fotos seleccionadas en la tabla y actualiza la sesión."""
+    if not seleccion:
+        return 0
+    
+    # Obtener la lista de fotos seleccionadas
+    nombres_a_borrar = []
+    for idx in seleccion:
+        nombres_a_borrar.append(df.iloc[idx]["Archivo"])
+        
+    # Borrar de la nube
+    for f in nombres_a_borrar:
+        nube.borrar_foto_nube(pedido_id, f)
+        # 🔥 Ocultarlas de la pantalla inmediatamente (el truco de la lista negra)
+        st.session_state["fotos_ocultas"].add(f)
+        
+    # Limpiar caché para que la próxima recarga traiga los datos reales
+    st.cache_data.clear()
+    return len(nombres_a_borrar)
 
 # ============ GESTIÓN DE PEDIDOS ============
 def mostrar_gestion_pedidos():
