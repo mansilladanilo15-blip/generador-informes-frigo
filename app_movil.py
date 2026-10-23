@@ -169,14 +169,14 @@ if pedido:
     # OTRAS CATEGORÍAS
     st.markdown("### 📸 Otras Categorías")
     
-    def mostrar_otras_categorias(titulo, categoria):
-        fotos_existentes = nube.obtener_fotos_nube(pedido_id)
-        fotos_existentes = [f for f in fotos_existentes if f.startswith(f"{categoria}_")]
-        cantidad_fotos = len(fotos_existentes)
+def mostrar_otras_categorias(titulo, categoria):
+    fotos_existentes = nube.obtener_fotos_nube(pedido_id)
+    fotos_existentes = [f for f in fotos_existentes if f.startswith(f"{categoria}_")]
+    cantidad_fotos = len(fotos_existentes)
     
-        titulo_con_contador = f"{titulo} ({cantidad_fotos})"
+    titulo_con_contador = f"{titulo} ({cantidad_fotos})"
     
-        with st.expander(titulo_con_contador, expanded=False):
+    with st.expander(titulo_con_contador, expanded=False):
         if fotos_existentes:
             cols = st.columns(3)
             for idx, f in enumerate(fotos_existentes):
