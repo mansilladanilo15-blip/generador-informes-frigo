@@ -5,16 +5,19 @@ from io import BytesIO
 from PIL import Image
 import numpy as np
 
-# 🔥 IMPORTAMOS PADDLE OCR DIRECTAMENTE
-# lang='en' es MUCHO más liviano que 'es' y detecta números igual de bien.
-# show_log=False reduce el ruido en consola y el uso de memoria.
+# 🔥 IMPORTAMOS PADDLE OCR Y PADDLE PARA CONTROLAR EL DISPOSITIVO
 try:
     from paddleocr import PaddleOCR
+    import paddle
+
+    # ✅ SOLUCIÓN: En PaddleOCR 3.x, use_gpu ha sido eliminado.
+    # Forzamos el uso de CPU con paddle.set_device antes de inicializar.
+    paddle.set_device('cpu')
+
     ocr_model = PaddleOCR(
-        use_angle_cls=True,
-        lang='en',
-        use_gpu=False,
-        show_log=False,
+        use_angle_cls=True,  # Aún se acepta, aunque puede mostrar un warning
+        lang='en',           # Más liviano que 'es'
+        show_log=False,      # Reduce el ruido en consola
     )
     error_ocr = None
 except Exception as e:
@@ -26,8 +29,6 @@ def analizar_fotos(fotos_bytes_list):
     """
     Procesa una lista de fotos directamente en la nube.
     fotos_bytes_list: [(nombre, bytes), ...]
-    Devuelve lista de dicts con: archivo, pata, total_cajas, nro_entrega,
-    fecha, texto_crudo, confianza.
     """
     if not ocr_model:
         raise Exception(f"El modelo OCR no está disponible. Detalle: {error_ocr}")
@@ -39,7 +40,7 @@ def analizar_fotos(fotos_bytes_list):
             # Convertimos los bytes a una imagen compatible con PaddleOCR
             img = Image.open(BytesIO(contenido_bytes)).convert("RGB")
 
-            # 🔥 Reducimos el tamaño si es muy grande (ahorra RAM y acelera)
+            # Reducimos el tamaño si es muy grande (ahorra RAM y acelera)
             max_lado = 1600
             if max(img.width, img.height) > max_lado:
                 ratio = max_lado / max(img.width, img.height)
@@ -47,7 +48,7 @@ def analizar_fotos(fotos_bytes_list):
 
             img_array = np.array(img)
 
-            # Ejecutamos el OCR
+            # Ejecutamos el OCR (en 3.x, .ocr sigue funcionando, aunque .predict es lo nuevo)
             resultado = ocr_model.ocr(img_array, cls=True)
 
             textos = []
