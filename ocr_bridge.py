@@ -13,12 +13,15 @@ try:
     # Forzamos CPU (esto ya lo tenías y está bien)
     paddle.set_device('cpu')
 
-    ocr_model = PaddleOCR(
-        use_angle_cls=True,  # Aún se acepta en 3.x (aunque puede mostrar un warning)
-        lang='en'
-        # ❌ ELIMINADO: show_log=False
-    )
-    error_ocr = None
+# 1. Cambia la inicialización del modelo:
+ocr_model = PaddleOCR(
+    lang='en',
+    use_textline_orientation=True,  # ✅ Reemplaza a use_angle_cls y cls=True
+    # use_angle_cls ya no es necesario
+)
+
+# 2. Cambia la llamada al OCR (elimina cls=True):
+resultado = ocr_model.ocr(img_array)  # ✅ Sin el parámetro cls
 except Exception as e:
     ocr_model = None
     error_ocr = str(e)
