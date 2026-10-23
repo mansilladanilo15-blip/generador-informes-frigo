@@ -9,7 +9,7 @@ import numpy as np
 try:
     from paddleocr import PaddleOCR
     # Inicializamos el OCR una sola vez para que sea rápido
-    ocr_model = PaddleOCR(use_angle_cls=True, lang='es', show_log=False)
+    ocr_model = PaddleOCR(use_angle_cls=True, lang='es')
     error_ocr = None
 except Exception as e:
     ocr_model = None
