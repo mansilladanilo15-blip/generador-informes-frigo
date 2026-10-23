@@ -107,12 +107,10 @@ def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
         
     st.cache_data.clear()
     
-    # 🔥 LIMPIEZA PROFUNDA DE MEMORIA:
-    # 1. Borramos la tabla de la memoria para obligar a que se reconstruya limpia
+    # Limpieza profunda de memoria
     if f"ocr_result_{pedido_id}" in st.session_state:
         del st.session_state[f"ocr_result_{pedido_id}"]
         
-    # 2. Borramos la selección del multiselect
     key_multiselect = f"sel_borrar_estibas_{pedido_id}"
     if key_multiselect in st.session_state:
         del st.session_state[key_multiselect]
@@ -312,6 +310,7 @@ if pedido_actual:
                             else:
                                 st.success(f"✅ Se guardaron {patas_guardadas} fotos correctamente.")
                             
+                            st.session_state["reinicio_count"] += 1
                             time.sleep(2)
                             st.rerun()
                         except Exception as e:
@@ -322,64 +321,77 @@ if pedido_actual:
         if estibas:
             st.markdown("### 📋 Resumen de Patas y Cajas")
             
-            if f"ocr_result_{pedido_actual}" not in st.session_state:
-                df_estibas = pd.DataFrame([{"Pata": f.split("_")[2].replace(".jpg", ""), "Archivo": f, "Cajas": 0} for f in estibas])
-                st.session_state[f"ocr_result_{pedido_actual}"] = df_estibas
-
-            df_editado = st.data_editor(
-                st.session_state[f"ocr_result_{pedido_actual}"],
-                width="stretch",
-                disabled=bloqueado,
-                hide_index=True,
-                num_rows="fixed",
-                key=f"editor_estibas_{pedido_actual}",
-                column_config={
-                    "Archivo": st.column_config.TextColumn("Archivo", disabled=True),
-                    "Pata OCR": st.column_config.NumberColumn("Pata OCR", disabled=True),
-                    "Pata Final (Editable)": st.column_config.NumberColumn("Pata Final"),
-                    "Cajas": st.column_config.NumberColumn("Cajas")
-                }
-            )
-            st.session_state[f"ocr_result_{pedido_actual}"] = df_editado
+            # 🔥 CONSTRUIMOS LA TABLA DESDE CERO USANDO LAS FOTOS REALES
+            datos_tabla = []
+            for f in estibas:
+                if f in st.session_state["fotos_ocultas"]:
+                    continue
+                pata_num = f.split("_")[2].replace(".jpg", "")
+                datos_tabla.append({
+                    "Archivo": f,
+                    "Pata OCR": int(pata_num) if pata_num.isdigit() else 0,
+                    "Pata Final (Editable)": int(pata_num) if pata_num.isdigit() else 0,
+                    "Cajas": 0
+                })
+                
+            df_editado = pd.DataFrame(datos_tabla)
             
-            if not bloqueado:
-                filas_seleccionadas = st.multiselect(
-                    "Selecciona las fotos que deseas eliminar (puedes elegir varias):",
-                    options=range(len(df_editado)),
-                    format_func=lambda i: f"Pata {df_editado.iloc[i].get('Pata Final (Editable)', '?')} - {df_editado.iloc[i]['Archivo']}",
-                    key=f"sel_borrar_estibas_{pedido_actual}"
+            if not df_editado.empty:
+                df_editado = st.data_editor(
+                    df_editado,
+                    width="stretch",
+                    disabled=bloqueado,
+                    hide_index=True,
+                    num_rows="fixed",
+                    key=f"editor_estibas_{pedido_actual}_{RC}",
+                    column_config={
+                        "Archivo": st.column_config.TextColumn("Archivo", disabled=True),
+                        "Pata OCR": st.column_config.NumberColumn("Pata OCR", disabled=True),
+                        "Pata Final (Editable)": st.column_config.NumberColumn("Pata Final"),
+                        "Cajas": st.column_config.NumberColumn("Cajas")
+                    }
                 )
                 
-                if filas_seleccionadas:
-                    if st.button("🗑️ Eliminar Fotos Seleccionadas", type="primary", width="stretch"):
-                        with st.spinner("Borrando fotos..."):
-                            # 🔥 CORRECCIÓN AQUÍ: Se quitó el 4to parámetro que causaba el error
-                            cant = borrar_fotos_seleccionadas(pedido_actual, df_editado, filas_seleccionadas)
-                            st.success(f"✅ {cant} fotos eliminadas correctamente.")
-                            time.sleep(1.5)
-                            st.rerun()
+                if not bloqueado:
+                    filas_seleccionadas = st.multiselect(
+                        "Selecciona las fotos que deseas eliminar (puedes elegir varias):",
+                        options=range(len(df_editado)),
+                        format_func=lambda i: f"Pata {df_editado.iloc[i]['Pata Final (Editable)']} - {df_editado.iloc[i]['Archivo']}",
+                        key=f"sel_borrar_estibas_{pedido_actual}_{RC}"
+                    )
+                    
+                    if filas_seleccionadas:
+                        if st.button("🗑️ Eliminar Fotos Seleccionadas", type="primary", width="stretch"):
+                            with st.spinner("Borrando fotos..."):
+                                cant = borrar_fotos_seleccionadas(pedido_actual, df_editado, filas_seleccionadas)
+                                st.success(f"✅ {cant} fotos eliminadas correctamente.")
+                                st.session_state["reinicio_count"] += 1 
+                                time.sleep(1)
+                                st.rerun()
 
-            total_patas = len(df_editado)
-            try:
-                total_cajas = int(pd.to_numeric(df_editado["Cajas"], errors='coerce').fillna(0).sum())
-            except:
-                total_cajas = 0
-            
-            col_m1, col_m2 = st.columns(2)
-            col_m1.metric(label="📦 Total Patas Detectadas", value=total_patas)
-            col_m2.metric(label="🧊 Total Cajas Detectadas", value=total_cajas)
-            
-            st.divider()
-            st.markdown("### ✏️ Revisión Foto por Foto")
-            col_tabla, col_preview = st.columns([1.5, 1])
-            with col_preview:
-                archivo_sel = st.selectbox("Ver foto:", df_editado["Archivo"].tolist(), key=f"sel_ocr_{RC}_{pedido_actual}")
-                if archivo_sel:
-                    b = nube.descargar_foto_nube(pedido_actual, archivo_sel)
-                    b64 = convertir_a_base64(b, 600)
-                    st.markdown(f'<img src="{b64}" style="width:100%; border-radius:8px;">', unsafe_allow_html=True)
-            with col_tabla:
-                st.info("Edita la Pata y las Cajas en la tabla superior. Para borrar fotos equivocadas, selecciónalas en la lista y presiona 'Eliminar'.")
+                total_patas = len(df_editado)
+                try:
+                    total_cajas = int(pd.to_numeric(df_editado["Cajas"], errors='coerce').fillna(0).sum())
+                except:
+                    total_cajas = 0
+                
+                col_m1, col_m2 = st.columns(2)
+                col_m1.metric(label="📦 Total Patas Detectadas", value=total_patas)
+                col_m2.metric(label="🧊 Total Cajas Detectadas", value=total_cajas)
+                
+                st.divider()
+                st.markdown("### ✏️ Revisión Foto por Foto")
+                col_tabla, col_preview = st.columns([1.5, 1])
+                with col_preview:
+                    archivo_sel = st.selectbox("Ver foto:", df_editado["Archivo"].tolist(), key=f"sel_ocr_{RC}_{pedido_actual}")
+                    if archivo_sel:
+                        b = nube.descargar_foto_nube(pedido_actual, archivo_sel)
+                        b64 = convertir_a_base64(b, 600)
+                        st.markdown(f'<img src="{b64}" style="width:100%; border-radius:8px;">', unsafe_allow_html=True)
+                with col_tabla:
+                    st.info("Edita la Pata y las Cajas en la tabla superior. Para borrar fotos equivocadas, selecciónalas en la lista y presiona 'Eliminar'.")
+            else:
+                st.info("No hay fotos para mostrar.")
 
     def seccion_extra(titulo, prefijo):
         with st.expander(titulo, expanded=False):
