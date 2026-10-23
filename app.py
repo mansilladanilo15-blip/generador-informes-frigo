@@ -123,32 +123,6 @@ def mostrar_gestion_pedidos():
             st.success("✅ Pedido creado.")
             st.rerun()
 
-    st.divider()
-    st.markdown("**Pedidos Existentes**")
-    pedidos = nube.obtener_pedidos_nube()
-
-    if pedidos:
-        for p in pedidos:
-            fotos = nube.obtener_fotos_nube(p['id'])
-            estado_mostrar = f"🟢 {p.get('estado')} ({len(fotos)} fotos)" if len(fotos) > 0 else "🟡 Sin fotos"
-            col_a, col_b, col_c, col_d = st.columns([4, 2, 1, 1])
-            with col_a: st.write(f"**{p['nro_pedido']}** - {p['cliente']} ({p['tipo']})")
-            with col_b: st.write(estado_mostrar)
-
-            with col_c:
-                if st.button("👁️", key=f"ver_{p['id']}", width="stretch"):
-                    st.session_state["cargar_ultimo"] = p
-                    st.session_state["pedido_actual_id"] = p["id"]
-                    st.session_state["forzar_modo_informe"] = True
-                    st.rerun()
-
-            with col_d:
-                if st.button("🗑️", key=f"del_{p['id']}", width="stretch"):
-                    nube.borrar_pedido_nube(p['id'])
-                    st.success("Pedido eliminado.")
-                    time.sleep(1.5)
-                    st.rerun()
-
 # ============ ENRUTADOR ============
 if st.session_state.get("forzar_modo_informe", False):
     st.session_state["selector_modo"] = "📄 Generar Informe"
@@ -165,19 +139,64 @@ if modo == "📋 Gestión de Pedidos":
 # ============ MODO INFORME ============
 pedido_actual = st.session_state.get("pedido_actual_id", "")
 bloqueado = False
+
+# Obtener todos los pedidos para el menú lateral y validar estado
+pedidos_nube = nube.obtener_pedidos_nube()
+
 if pedido_actual:
-    pedidos_nube = nube.obtener_pedidos_nube()
     for p in pedidos_nube:
         if p['id'] == pedido_actual:
             bloqueado = (p.get('estado') == 'Finalizado')
+            st.session_state["cargar_ultimo"] = p # Sincronizar datos del pedido actual
 
+# ============ BARRA LATERAL (NAVEGACIÓN) ============
 with st.sidebar:
+    st.markdown("### 🧭 Navegación Rápida")
+    
+    if not pedidos_nube:
+        st.info("No hay pedidos creados.")
+    else:
+        # Separar pedidos
+        pendientes = [p for p in pedidos_nube if p.get('estado') != 'Finalizado']
+        finalizados = [p for p in pedidos_nube if p.get('estado') == 'Finalizado']
+        
+        # Función para crear los botones
+        def boton_pedido(p, icono):
+            label = f"{icono} {p['nro_pedido']} - {p['cliente'][:15]}..."
+            # Si es el pedido actual, resaltarlo en negrita
+            if p['id'] == pedido_actual:
+                st.button(label, key=f"nav_{p['id']}", type="primary", width="stretch", disabled=True)
+            else:
+                if st.button(label, key=f"nav_{p['id']}", width="stretch"):
+                    st.session_state["cargar_ultimo"] = p
+                    st.session_state["pedido_actual_id"] = p["id"]
+                    st.session_state["reinicio_count"] += 1
+                    st.rerun()
+
+        # Mostrar Pendientes
+        if pendientes:
+            st.markdown("**🟡 Pendientes**")
+            for p in pendientes:
+                boton_pedido(p, "📦")
+                
+        # Mostrar Finalizados
+        if finalizados:
+            st.divider()
+            st.markdown("**🟢 Finalizados**")
+            for p in finalizados:
+                boton_pedido(p, "🔒")
+                
+    st.divider()
     if st.button("🧹 Reiniciar app", width="stretch"):
         st.session_state.clear()
         st.rerun()
 
+# ============ FIN BARRA LATERAL ============
+
 st.subheader("📋 Datos generales")
 if bloqueado: st.warning("🔒 Pedido FINALIZADO.")
+
+# ... (El resto del código sigue exactamente igual a partir del formulario de datos) ...
 
 with st.form("datos"):
     c1, c2, c3 = st.columns(3)
@@ -286,7 +305,6 @@ if pedido_actual:
         if estibas:
             st.markdown("### 📋 Resumen de Patas y Cajas")
             
-            # Si el usuario ya analizó, usamos esos datos para las métricas, si no, mostramos 0
             if f"ocr_result_{pedido_actual}" in st.session_state:
                 df_editado = st.data_editor(
                     st.session_state[f"ocr_result_{pedido_actual}"],
@@ -296,7 +314,6 @@ if pedido_actual:
                 )
                 st.session_state[f"ocr_result_{pedido_actual}"] = df_editado
                 
-                # 🔥 MÉTRICAS TOTALES (La suma que faltaba)
                 total_patas = len(df_editado)
                 try:
                     total_cajas = int(pd.to_numeric(df_editado["Cajas"], errors='coerce').fillna(0).sum())
@@ -319,7 +336,6 @@ if pedido_actual:
                 with col_tabla:
                     st.info("Si el OCR cometió un error, puedes editar la columna 'Pata Final (Editable)' y la columna 'Cajas'.")
             else:
-                # Si no hay OCR en memoria, mostramos un resumen básico
                 df_estibas = pd.DataFrame([{"Pata": f.split("_")[2].replace(".jpg", ""), "Archivo": f} for f in estibas])
                 st.dataframe(df_estibas, width="stretch", hide_index=True)
                 st.info("💡 Para extraer el conteo de cajas y ver las métricas, sube nuevas fotos arriba.")
