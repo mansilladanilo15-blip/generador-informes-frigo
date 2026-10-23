@@ -43,6 +43,7 @@ def mostrar_zoom(nombre_foto, bytes_foto):
     if st.button("❌ Cerrar", use_container_width=True, key="close_modal"):
         st.rerun()
 
+# 🔥 FUNCIÓN DE GALERÍA CORREGIDA (CON DERIVACIÓN Y BORRADO)
 def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
     if not fotos: return
     cols = st.columns(cols_num)
@@ -58,21 +59,40 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
                 if st.button("🔍 Ver", key=f"{key}_zoom_{i}_{RC}", use_container_width=True):
                     mostrar_zoom(f, bytes_img)
             with col2:
-                if st.button("🗑️", key=f"{key}_del_{i}_{RC}", use_container_width=True):
+                if st.button("🗑️ Borrar", key=f"{key}_del_{i}_{RC}", use_container_width=True):
                     nube.borrar_foto_nube(pedido_id, f)
+                    st.success("Foto eliminada.")
+                    time.sleep(1)
                     st.rerun()
             
-            # Selector de derivación
-            opciones = ["Mantener", "Mover a Camión", "Mover a Termógrafo", "Mover a Sello", "Mover a Thermo-king"]
-            destino = st.selectbox("Mover:", opciones, key=f"derivar_{key}_{i}_{RC}", label_visibility="collapsed")
-            if destino != "Mantener":
+            # SELECTOR PARA DERIVAR
+            opciones = ["Mantener aquí", "Mover a Documentación", "Mover a Camión", "Mover a Termógrafo", "Mover a Sello", "Mover a Thermo-king"]
+            # Filtramos para no mover a la misma categoría
+            opciones_filtradas = [op for op in opciones if op != f"Mover a {key.capitalize()}"]
+            
+            destino = st.selectbox("Mover foto a:", opciones_filtradas, key=f"derivar_{key}_{i}_{RC}", label_visibility="collapsed")
+            
+            if destino != "Mantener aquí":
                 if st.button("➡️ Confirmar", key=f"btn_mover_{key}_{i}_{RC}", use_container_width=True):
-                    prefijo = {"Mover a Camión": "camion_", "Mover a Termógrafo": "termografo_", "Mover a Sello": "sello_", "Mover a Thermo-king": "thermoking_"}[destino]
+                    prefijo = {
+                        "Mover a Documentación": "documentacion_",
+                        "Mover a Camión": "camion_",
+                        "Mover a Termógrafo": "termografo_",
+                        "Mover a Sello": "sello_",
+                        "Mover a Thermo-king": "thermoking_"
+                    }[destino]
+                    
                     nuevo_nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
-                    # Descargar, subir con nuevo nombre y borrar el viejo
+                    
+                    # 1. Descargar de Supabase
                     bytes_foto = nube.descargar_foto_nube(pedido_id, f)
+                    # 2. Subir con el nuevo nombre
                     nube.subir_foto_nube(pedido_id, nuevo_nombre, bytes_foto)
+                    # 3. Borrar la original
                     nube.borrar_foto_nube(pedido_id, f)
+                    
+                    st.success(f"Foto movida a {destino}.")
+                    time.sleep(1)
                     st.rerun()
 
 def val(key, default=""):
@@ -215,13 +235,24 @@ st.subheader("📷 Fotos")
 if pedido_actual:
     fotos = nube.obtener_fotos_nube(pedido_actual)
     
+    # 0. Documentación
     with st.expander("0. Documentación", expanded=False):
         docs = [x for x in fotos if x.startswith("documentacion_")]
         if docs:
-            renderizar_galeria("doc", docs, pedido_actual, cols_num=4)
+            renderizar_galeria("documentacion", docs, pedido_actual, cols_num=4)
         else:
             st.info("No hay documentación.")
-            
+        
+        if not bloqueado:
+            st.markdown("**Subir más fotos:**")
+            nuevas = st.file_uploader("Subir documentación", type=["jpg", "png"], accept_multiple_files=True, key=f"up_doc_{RC}")
+            if nuevas:
+                for f in nuevas:
+                    nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
+                    nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
+                st.rerun()
+
+    # 1. Estibas
     with st.expander("1. Estibas", expanded=True):
         estibas = [x for x in fotos if x.startswith("estiba_pata_")]
         if estibas:
@@ -231,14 +262,43 @@ if pedido_actual:
                     b = nube.descargar_foto_nube(pedido_actual, f)
                     b64 = convertir_a_base64(b, 400)
                     st.markdown(f'<img src="{b64}" style="width:100%">', unsafe_allow_html=True)
-                    
-    for cat, pre in [("2. Camión", "camion_"), ("3. Termógrafo", "termografo_"), ("4. Sellos", "sello_"), ("5. Thermo-king", "thermoking_")]:
-        with st.expander(cat, expanded=False):
-            items = [x for x in fotos if x.startswith(pre)]
+        
+        if not bloqueado:
+            st.markdown("**Subir más fotos (asignar pata):**")
+            c_pata, c_file = st.columns([1, 3])
+            with c_pata:
+                nro_pata = st.number_input("Pata N°", min_value=1, max_value=99, value=1, key=f"nro_pata_manual_{RC}")
+            with c_file:
+                nuevas_est = st.file_uploader("Subir fotos de estiba", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
+                if nuevas_est:
+                    for f in nuevas_est:
+                        nombre = f"estiba_pata_{nro_pata}.jpg"
+                        nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
+                        nro_pata += 1 # Aumenta para la siguiente foto
+                    st.rerun()
+
+    # 2, 3, 4, 5
+    def seccion_extra(titulo, prefijo):
+        with st.expander(titulo, expanded=False):
+            items = [x for x in fotos if x.startswith(prefijo)]
             if items:
-                renderizar_galeria(pre, items, pedido_actual, cols_num=4)
+                renderizar_galeria(prefijo, items, pedido_actual, cols_num=4)
             else:
                 st.info("No hay fotos.")
+            
+            if not bloqueado:
+                st.markdown("**Subir más fotos manualmente:**")
+                nuevas = st.file_uploader(f"Subir fotos ({titulo})", type=["jpg", "png"], accept_multiple_files=True, key=f"up_{prefijo}_{RC}")
+                if nuevas:
+                    for f in nuevas:
+                        nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
+                        nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
+                    st.rerun()
+
+    seccion_extra("2. Camión", "camion_")
+    seccion_extra("3. Termógrafo", "termografo_")
+    seccion_extra("4. Sellos", "sello_")
+    seccion_extra("5. Thermo-king", "thermoking_")
 
 st.divider()
 c1, c2 = st.columns(2)
