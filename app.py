@@ -111,6 +111,7 @@ def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
     if key_multiselect in st.session_state:
         del st.session_state[key_multiselect]
     return len(nombres_a_borrar)
+
 def borrar_todas_las_estibas(pedido_id, fotos_estibas):
     """Elimina todas las fotos de estibas (incluyendo duplicados) de la nube."""
     for f in fotos_estibas:
@@ -121,7 +122,6 @@ def borrar_todas_las_estibas(pedido_id, fotos_estibas):
     
     st.cache_data.clear()
     
-    # Limpiamos las selecciones de la memoria
     for key in list(st.session_state.keys()):
         if key.startswith("sel_borrar_estibas_") or key.startswith("editor_estibas_"):
             del st.session_state[key]
@@ -285,7 +285,7 @@ if pedido_actual:
         
         if not bloqueado:
             # 🔥 BOTÓN DE EMERGENCIA PARA LIMPIAR TODO
-        if estibas:
+            if estibas:
                 with st.expander("🧨 Zona de Peligro (Limpiar todas las estibas)"):
                     st.warning("Esto eliminará TODAS las fotos de estibas de este pedido en la nube. Úsalo solo si necesitas empezar de cero.")
                     if st.button("🗑️ Borrar TODAS las fotos de estibas", type="primary", width="stretch"):
@@ -295,6 +295,7 @@ if pedido_actual:
                             st.session_state["reinicio_count"] += 1
                             time.sleep(1.5)
                             st.rerun()
+
             st.markdown("### 📤 Subir y Procesar Fotos Nuevas")
             st.info("Sube las fotos de WhatsApp. El OCR les asignará el número de Pata y contará las cajas.")
             fotos_manuales = st.file_uploader("Selecciona las fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
@@ -354,7 +355,6 @@ if pedido_actual:
                     else:
                         st.success(mensaje)
                     
-                    # 🔥 LIMPIAR EL CARGADOR Y RECARGAR
                     st.session_state["reinicio_count"] += 1
                     time.sleep(3)
                     st.rerun()
@@ -366,9 +366,7 @@ if pedido_actual:
             
             datos_tabla = []
             for f in estibas:
-                # Extrae el número quitando el .jpg
                 pata_num = f.split("_")[2].replace(".jpg", "")
-                
                 cajas_guardadas = st.session_state["cajas_temporales"].get(f, 0)
                 
                 datos_tabla.append({
