@@ -16,34 +16,6 @@ def obtener_cliente():
 # ==========================================
 # FUNCIONES PARA PEDIDOS (BASE DE DATOS)
 # ==========================================
-import time # Asegúrate de tener esto importado
-
-def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
-    supabase = obtener_cliente()
-    ruta_nube = f"{pedido_id}/{nombre_archivo}"
-    
-    # 1. Creamos un archivo temporal real en el servidor
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-        tmp.write(bytes(contenido_bytes))
-        ruta_temporal = tmp.name
-    
-    try:
-        # 2. Lo subimos SIN UPSERT
-        with open(ruta_temporal, "rb") as f:
-            supabase.storage.from_("fotos").upload(
-                path=ruta_nube,
-                file=f,
-                file_options={
-                    "content-type": "image/jpeg"
-                    # ❌ NO PONGAS "upsert": "true" AQUÍ
-                }
-            )
-    finally:
-        # 3. Borramos el archivo temporal
-        if os.path.exists(ruta_temporal):
-            os.remove(ruta_temporal)
-        
-    return supabase.storage.from_("fotos").get_public_url(ruta_nube)
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
     respuesta = supabase.table("pedidos").select("*").execute()
@@ -67,18 +39,28 @@ def borrar_pedido_nube(pedido_id):
         pass
     supabase.table("pedidos").delete().eq("id", pedido_id).execute()
 
+def subir_pedido_nube(pedido_id, datos):
+    """Guarda/actualiza un pedido en la tabla 'pedidos'."""
+    supabase = obtener_cliente()
+    payload = {
+        "id": pedido_id,
+        "datos_json": json.dumps(datos, ensure_ascii=False),
+    }
+    supabase.table("pedidos").upsert(payload).execute()
+
 # ==========================================
 # FUNCIONES PARA FOTOS (STORAGE)
 # ==========================================
 def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
+    """Sube una foto al bucket 'fotos' con upsert (sobrescribe si existe)."""
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
-    
+
     # 1. Creamos un archivo temporal real en el servidor
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         tmp.write(bytes(contenido_bytes))
         ruta_temporal = tmp.name
-    
+
     try:
         # 2. Lo subimos usando upsert para sobrescribir si ya existe
         with open(ruta_temporal, "rb") as f:
@@ -94,7 +76,7 @@ def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
         # 3. Borramos el archivo temporal
         if os.path.exists(ruta_temporal):
             os.remove(ruta_temporal)
-        
+
     return supabase.storage.from_("fotos").get_public_url(ruta_nube)
 
 def obtener_fotos_nube(pedido_id):
