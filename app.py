@@ -1,4 +1,3 @@
-from ocr_bridge import analizar_fotos
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime
@@ -11,6 +10,7 @@ import conexion_nube as nube
 
 import config
 from generador import generar_informe
+from ocr_bridge import analizar_fotos
 
 st.set_page_config(page_title="Generador de Informes", page_icon="📄", layout="wide")
 
