@@ -279,10 +279,10 @@ if pedido_actual:
                     texto_progreso = st.empty()
                     
                     from ocr_bridge import analizar_fotos
-                    mapa_bytes = {f.name: f.getvalue() for f in fotos_manuales}
                     total_fotos = len(fotos_manuales)
                     patas_guardadas = 0
                     errores = []
+                    omitidas = 0
                     
                     for idx, foto in enumerate(fotos_manuales):
                         texto_progreso.info(f"⏳ Procesando foto {idx + 1} de {total_fotos}: {foto.name}")
@@ -294,15 +294,23 @@ if pedido_actual:
                             cajas_detectadas = r.get("total_cajas", 0)
                             
                             if pata_detectada and pata_detectada != 99:
-                                # 🔥 FORZAMOS EL MISMO NOMBRE PARA SOBRESCRIBIR LA FOTO
                                 nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
                                 
-                                nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[foto.name])
+                                # 🔥 EVITAR DUPLICADOS: Verificar si ya está en la lista de fotos de la nube
+                                if nuevo_nombre in fotos:
+                                    omitidas += 1
+                                    continue # Saltar y no subir si ya existe
                                 
+                                nube.subir_foto_nube(pedido_actual, nuevo_nombre, foto.getvalue())
                                 st.session_state["cajas_temporales"][nuevo_nombre] = cajas_detectadas
                                 patas_guardadas += 1
                             else:
-                                nube.subir_foto_nube(pedido_actual, f"estiba_pata_99.jpg", mapa_bytes[foto.name])
+                                nuevo_nombre = f"estiba_pata_99.jpg"
+                                if nuevo_nombre in fotos:
+                                    omitidas += 1
+                                    continue
+                                    
+                                nube.subir_foto_nube(pedido_actual, nuevo_nombre, foto.getvalue())
                                 errores.append(foto.name)
                         
                         progreso.progress((idx + 1) / total_fotos)
@@ -310,11 +318,16 @@ if pedido_actual:
                     texto_progreso.empty()
                     progreso.empty()
                     
-                    if errores:
-                        st.warning(f"⚠️ Se guardaron {patas_guardadas} fotos. Estas no se pudieron asignar y se guardaron como Pata 99: {', '.join(errores)}")
-                    else:
-                        st.success(f"✅ Se procesaron y guardaron {patas_guardadas} fotos correctamente.")
+                    mensaje = f"✅ Se guardaron {patas_guardadas} fotos nuevas."
+                    if omitidas > 0:
+                        mensaje += f" Se omitieron {omitidas} fotos porque ya existían."
                     
+                    if errores:
+                        st.warning(f"⚠️ {mensaje} Fotos sin pata: {', '.join(errores)}")
+                    else:
+                        st.success(mensaje)
+                    
+                    # 🔥 LIMPIAR EL CARGADOR Y RECARGAR
                     st.session_state["reinicio_count"] += 1
                     time.sleep(3)
                     st.rerun()
