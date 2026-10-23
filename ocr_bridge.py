@@ -1,10 +1,14 @@
+import os
 import re
 import threading
 from io import BytesIO
 from PIL import Image
 import numpy as np
 
-# 🔥 Importamos PaddleOCR y Paddle
+# 🔥 1. LIMITAR HILOS A NIVEL DE SISTEMA (Evita que Streamlit bloquee la app)
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+
 try:
     from paddleocr import PaddleOCR
     import paddle
@@ -12,17 +16,19 @@ try:
     # Forzamos CPU
     paddle.set_device('cpu')
 
-    # Variable global para el modelo (se inicializa por hilo)
+    # Variable global para el modelo (se inicializa por hilo para evitar crashes en Streamlit)
     _ocr_local = threading.local()
 
     def obtener_ocr():
         """Obtiene una instancia de OCR para el hilo actual."""
         if not hasattr(_ocr_local, "model"):
-            # enable_mkldnn=False evita el crash de oneDNN en CPU [citation:2][citation:12]
+            # 🔥 2. "DIETA" DE RECURSOS PARA PADDLEOCR
             _ocr_local.model = PaddleOCR(
                 lang='en',
                 use_textline_orientation=True,
-                enable_mkldnn=False,  # 🔥 CRUCIAL para evitar std::exception
+                enable_mkldnn=False,  # Evita el crash std::exception en CPU
+                cpu_threads=1,        # 🔥 Solo usa 1 núcleo de CPU
+                rec_batch_num=1,      # 🔥 Procesa el texto en lotes de 1
             )
         return _ocr_local.model
 
@@ -45,29 +51,27 @@ def analizar_fotos(fotos_bytes_list):
             # Convertir bytes a imagen
             img = Image.open(BytesIO(contenido_bytes)).convert("RGB")
 
-            # Reducir tamaño si es muy grande
-            max_lado = 1600
+            # 🔥 3. REDUCIR EL TAMAÑO DE LA IMAGEN (Ahorra muchísima CPU)
+            max_lado = 1000  # Antes 1600, ahora 1000
             if max(img.width, img.height) > max_lado:
                 ratio = max_lado / max(img.width, img.height)
                 img = img.resize((int(img.width * ratio), int(img.height * ratio)))
 
             img_array = np.array(img)
 
-            # ✅ En PaddleOCR 3.x usamos .predict() en lugar de .ocr()
+            # Usar .predict() en lugar de .ocr() para PaddleOCR 3.x
             resultado = ocr_model.predict(img_array)
 
             textos = []
             confianzas = []
 
-            # ✅ PaddleOCR 3.x devuelve un objeto OCRResult con rec_texts / rec_scores
+            # Extraer resultados según el formato de PaddleOCR 3.x
             if resultado and len(resultado) > 0:
                 res = resultado[0]
-                # Dependiendo de la versión exacta, puede ser dict o tener atributos
                 if isinstance(res, dict):
                     textos = res.get('rec_texts', [])
                     confianzas = res.get('rec_scores', [])
                 else:
-                    # Fallback por si acaso
                     textos = getattr(res, 'rec_texts', [])
                     confianzas = getattr(res, 'rec_scores', [])
 
@@ -79,7 +83,6 @@ def analizar_fotos(fotos_bytes_list):
             pata, cajas = None, None
             candidatos = []
 
-            # Procesar línea por línea
             for i, texto in enumerate(textos):
                 conf = confianzas[i] if i < len(confianzas) else 0.0
                 match = re.search(r'(\d{1,3})\s*[/\s]\s*(\d{1,4})', texto)
