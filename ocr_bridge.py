@@ -10,14 +10,13 @@ try:
     from paddleocr import PaddleOCR
     import paddle
 
-    # ✅ SOLUCIÓN: En PaddleOCR 3.x, use_gpu ha sido eliminado.
-    # Forzamos el uso de CPU con paddle.set_device antes de inicializar.
+    # Forzamos CPU (esto ya lo tenías y está bien)
     paddle.set_device('cpu')
 
     ocr_model = PaddleOCR(
-        use_angle_cls=True,  # Aún se acepta, aunque puede mostrar un warning
-        lang='en',           # Más liviano que 'es'
-        show_log=False,      # Reduce el ruido en consola
+        use_angle_cls=True,  # Aún se acepta en 3.x (aunque puede mostrar un warning)
+        lang='en'
+        # ❌ ELIMINADO: show_log=False
     )
     error_ocr = None
 except Exception as e:
