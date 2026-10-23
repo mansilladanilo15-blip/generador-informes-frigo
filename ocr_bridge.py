@@ -19,8 +19,11 @@ def analizar_fotos(fotos_bytes_list):
     Procesa una lista de fotos directamente en la nube.
     fotos_bytes_list: [(nombre, bytes), ...]
     """
-    if not ocr_model:
-        raise Exception("El modelo OCR no está disponible en el servidor.")
+if not ocr_model:
+    # Mostramos el error real que ocurrió al cargar el modelo
+    import streamlit as st
+    st.error(f"Error al cargar PaddleOCR: {error_ocr}")
+    raise Exception(f"El modelo OCR no está disponible. Detalle: {error_ocr}")
 
     resultados = []
     
