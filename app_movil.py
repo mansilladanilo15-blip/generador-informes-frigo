@@ -223,7 +223,8 @@ if pedido:
                     time.sleep(1)
                     st.rerun()
 
-    mostrar_categoria("2. Fotos Camión", "camion_")
-    mostrar_categoria("3. Termógrafo", "termografo_")
-    mostrar_categoria("4. Sellos", "sello_")
-    mostrar_categoria("5. Thermo-king", "thermoking_")
+# Llamadas a la función al final del archivo
+mostrar_otras_categorias("2. Fotos Camión", "camion")
+mostrar_otras_categorias("3. Fotos Termógrafo", "termografo")
+mostrar_otras_categorias("4. Fotos Sellos", "sello")
+mostrar_otras_categorias("5. Fotos Thermo-king", "thermoking")
