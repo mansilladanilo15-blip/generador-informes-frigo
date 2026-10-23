@@ -5,9 +5,9 @@ from io import BytesIO
 from PIL import Image
 import numpy as np
 
-# 🔥 1. LIMITAR HILOS A NIVEL DE SISTEMA
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
+# 🔥 1. Permitir que use 2 núcleos de CPU (Streamlit Cloud da 2)
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
 
 try:
     from paddleocr import PaddleOCR
@@ -22,8 +22,8 @@ try:
                 lang='en',
                 use_textline_orientation=True,
                 enable_mkldnn=False,
-                cpu_threads=1,        
-                rec_batch_num=1,      
+                cpu_threads=2,        # 🔥 Usar 2 núcleos
+                rec_batch_num=6,      # 🔥 Procesar de 6 líneas en 6 líneas
             )
         return _ocr_local.model
 
@@ -43,7 +43,8 @@ def analizar_fotos(fotos_bytes_list):
             ocr_model = obtener_ocr()
             img = Image.open(BytesIO(contenido_bytes)).convert("RGB")
 
-            max_lado = 1000  
+            # 🔥 2. BAJAR RESOLUCIÓN: De 1000 a 700px para que vuele
+            max_lado = 700  
             if max(img.width, img.height) > max_lado:
                 ratio = max_lado / max(img.width, img.height)
                 img = img.resize((int(img.width * ratio), int(img.height * ratio)))
@@ -67,36 +68,29 @@ def analizar_fotos(fotos_bytes_list):
             texto_upper = texto_completo.upper()
             confianza_promedio = sum(confianzas) / len(confianzas) if confianzas else 0.0
 
-            # --- 🔥 NUEVA LÓGICA BASADA EN TU FOTO 🔥 ---
+            # --- LÓGICA DE BÚSQUEDA (La misma que ya te funcionó) ---
             pata, cajas = None, None
             entrega = None
 
-            # 1. Buscar el patrón central exacto: "15/52" (Pata/Cajas)
-            # Esta regla busca números de 1 a 3 dígitos, una barra, y números de 1 a 4 dígitos.
-            # Ej: 15/52, 4/120, 01/50
             match_central = re.search(r'\b(\d{1,3})\s*/\s*(\d{1,4})\b', texto_upper)
             
             if match_central:
                 pata = int(match_central.group(1))
                 cajas = int(match_central.group(2))
             else:
-                # Si por alguna razón el OCR leyó "15 52" con un espacio en vez de barra
                 match_espacio = re.search(r'\b(\d{1,2})\s+(\d{1,4})\b', texto_upper)
                 if match_espacio:
                     pata = int(match_espacio.group(1))
                     cajas = int(match_espacio.group(2))
 
-            # 2. Buscar el N° de Entrega (el número grande de 7 dígitos, ej: 8054669)
             match_entrega = re.search(r'\b(\d{7,8})\b', texto_upper)
             if match_entrega:
                 entrega = match_entrega.group(1)
 
-            # 3. Si aún no hay pata, usar un valor por defecto para que no falle
             if pata is None:
-                pata = 99  # Lo mandará a la bandeja de revisión manual
+                pata = 99 
             if cajas is None:
                 cajas = 0
-            # ---------------------------------------------
 
             resultados.append({
                 "archivo": nombre,
