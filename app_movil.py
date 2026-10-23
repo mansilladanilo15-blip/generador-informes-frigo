@@ -6,7 +6,6 @@ import conexion_nube as nube
 
 st.set_page_config(page_title="App Operarios", page_icon="🚚", layout="centered")
 
-# AUTO-RECARGA
 if "auto_refresh" not in st.session_state:
     st.session_state["auto_refresh"] = True
 
@@ -17,7 +16,7 @@ col_titulo, col_boton = st.columns([4, 1])
 with col_titulo:
     st.title("📱 App de Operarios")
 with col_boton:
-    if st.button("🔄 Recargar", use_container_width=True):
+    if st.button("🔄 Recargar", width="stretch"):
         st.rerun()
 
 with st.sidebar:
@@ -27,7 +26,6 @@ with st.sidebar:
         st.session_state["auto_refresh"] = auto_recarga
         st.rerun()
 
-# CARGAR PEDIDOS DESDE SUPABASE
 todos_los_pedidos = nube.obtener_pedidos_nube()
 
 if not todos_los_pedidos:
@@ -61,7 +59,6 @@ if pedido:
         st.success("🔒 **ESTE PEDIDO HA SIDO FINALIZADO**")
         st.stop()
 
-    # CARTEL
     if pedido.get("tipo") == "Traslado":
         titulo_cartel = f"🚚 Traslado: {pedido.get('nro_entrega', pedido['nro_pedido'])}"
         subtitulo_cartel = f"Destino: {pedido['cliente']}"
@@ -113,7 +110,7 @@ if pedido:
                 with cols[idx % 3]:
                     bytes_img = nube.descargar_foto_nube(pedido_id, f)
                     mostrar_imagen_nube(bytes_img, f)
-                    if st.button(f"🗑️ Borrar", key=f"del_doc_{f}", use_container_width=True):
+                    if st.button(f"🗑️ Borrar", key=f"del_doc_{f}", width="stretch"):
                         nube.borrar_foto_nube(pedido_id, f)
                         st.rerun()
 
@@ -160,7 +157,7 @@ if pedido:
                             time.sleep(1)
                             st.rerun()
 
-        if st.button("➕ Agregar Pata", type="secondary", use_container_width=True):
+        if st.button("➕ Agregar Pata", type="secondary", width="stretch"):
             st.rerun()
 
     st.divider()
@@ -177,7 +174,7 @@ if pedido:
                     with cols[idx % 3]:
                         bytes_img = nube.descargar_foto_nube(pedido_id, f)
                         mostrar_imagen_nube(bytes_img, f)
-                        if st.button(f"🗑️ Borrar", key=f"del_{f}", use_container_width=True):
+                        if st.button(f"🗑️ Borrar", key=f"del_{f}", width="stretch"):
                             nube.borrar_foto_nube(pedido_id, f)
                             st.rerun()
             
