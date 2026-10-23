@@ -76,7 +76,10 @@ def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
             supabase.storage.from_("fotos").upload(
                 path=ruta_nube,
                 file=f,
-                file_options={"content-type": "image/jpeg"}
+                file_options={
+                    "content-type": "image/jpeg",
+                    "upsert": "true"  # 🔥 ESTO PERMITE SOBRESCRIBIR SI YA EXISTE
+                }
             )
     finally:
         # 3. Borramos el archivo temporal
