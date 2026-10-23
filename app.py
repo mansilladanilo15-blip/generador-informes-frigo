@@ -16,7 +16,7 @@ st.set_page_config(page_title="Generador de Informes", page_icon="📄", layout=
 if "reinicio_count" not in st.session_state:
     st.session_state["reinicio_count"] = 0
 if "fotos_ocultas" not in st.session_state:
-    st.session_state["fotos_ocultas"] = set() # 🔥 MEMORIA PARA FOTOS BORRADAS
+    st.session_state["fotos_ocultas"] = set()
 
 RC = st.session_state["reinicio_count"]
 
@@ -46,14 +46,10 @@ def mostrar_zoom(nombre_foto, bytes_foto):
     if st.button("❌ Cerrar", width="stretch", key="close_modal"):
         st.rerun()
 
-# 🔥 FUNCIÓN DE GALERÍA CORREGIDA
 def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
-    # Filtramos las fotos que el usuario acaba de borrar
     fotos = [f for f in fotos if f not in st.session_state["fotos_ocultas"]]
-    
     if not fotos: return
     cols = st.columns(cols_num)
-    
     for i, f in enumerate(fotos):
         with cols[i % cols_num]:
             img_placeholder = st.empty()
@@ -73,12 +69,8 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
                 if st.button("🗑️ Borrar", key=f"{key}_del_{i}_{RC}_{f}", width="stretch"):
                     with st.spinner("Borrando..."):
                         nube.borrar_foto_nube(pedido_id, f)
-                        
-                        # 🔥 Guardamos la foto en la lista negra para que desaparezca de la pantalla
                         st.session_state["fotos_ocultas"].add(f)
-                        # 🔥 Limpiamos el caché de Streamlit
                         st.cache_data.clear()
-                        
                         time.sleep(0.5)
                         st.rerun()
 
@@ -90,11 +82,9 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
                 if st.button("➡️ Confirmar", key=f"btn_mover_{key}_{i}_{RC}_{f}", width="stretch"):
                     prefijo = {"Mover a Documentación": "documentacion_", "Mover a Camión": "camion_", "Mover a Termógrafo": "termografo_", "Mover a Sello": "sello_", "Mover a Thermo-king": "thermoking_"}[destino]
                     nuevo_nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
-
                     bytes_foto = nube.descargar_foto_nube(pedido_id, f)
                     nube.subir_foto_nube(pedido_id, nuevo_nombre, bytes_foto)
                     nube.borrar_foto_nube(pedido_id, f)
-                    
                     st.session_state["fotos_ocultas"].add(f)
                     st.cache_data.clear()
                     time.sleep(0.5)
@@ -104,23 +94,15 @@ def val(key, default=""):
     ultimo_cargado = st.session_state.get("cargar_ultimo", {})
     v = ultimo_cargado.get(key, default)
     return default if v == "-" or v is None else v
-def borrar_fotos_seleccionadas(pedido_id, df, seleccion, prefijo):
+
+def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
     """Borra de la nube las fotos seleccionadas en la tabla y actualiza la sesión."""
     if not seleccion:
         return 0
-    
-    # Obtener la lista de fotos seleccionadas
-    nombres_a_borrar = []
-    for idx in seleccion:
-        nombres_a_borrar.append(df.iloc[idx]["Archivo"])
-        
-    # Borrar de la nube
+    nombres_a_borrar = [df.iloc[idx]["Archivo"] for idx in seleccion]
     for f in nombres_a_borrar:
         nube.borrar_foto_nube(pedido_id, f)
-        # 🔥 Ocultarlas de la pantalla inmediatamente (el truco de la lista negra)
         st.session_state["fotos_ocultas"].add(f)
-        
-    # Limpiar caché para que la próxima recarga traiga los datos reales
     st.cache_data.clear()
     return len(nombres_a_borrar)
 
@@ -177,7 +159,6 @@ if modo == "📋 Gestión de Pedidos":
 # ============ MODO INFORME ============
 pedido_actual = st.session_state.get("pedido_actual_id", "")
 bloqueado = False
-
 pedidos_nube = nube.obtener_pedidos_nube()
 
 if pedido_actual:
@@ -186,10 +167,9 @@ if pedido_actual:
             bloqueado = (p.get('estado') == 'Finalizado')
             st.session_state["cargar_ultimo"] = p
 
-# ============ BARRA LATERAL (NAVEGACIÓN) ============
+# ============ BARRA LATERAL ============
 with st.sidebar:
     st.markdown("### 🧭 Navegación Rápida")
-    
     if not pedidos_nube:
         st.info("No hay pedidos creados.")
     else:
@@ -205,27 +185,21 @@ with st.sidebar:
                     st.session_state["cargar_ultimo"] = p
                     st.session_state["pedido_actual_id"] = p["id"]
                     st.session_state["reinicio_count"] += 1
-                    # Limpiamos las fotos ocultas al cambiar de pedido
                     st.session_state["fotos_ocultas"] = set()
                     st.rerun()
 
         if pendientes:
             st.markdown("**🟡 Pendientes**")
-            for p in pendientes:
-                boton_pedido(p, "📦")
-                
+            for p in pendientes: boton_pedido(p, "📦")
         if finalizados:
             st.divider()
             st.markdown("**🟢 Finalizados**")
-            for p in finalizados:
-                boton_pedido(p, "🔒")
+            for p in finalizados: boton_pedido(p, "🔒")
                 
     st.divider()
     if st.button("🧹 Reiniciar app", width="stretch"):
         st.session_state.clear()
         st.rerun()
-
-# ============ FIN BARRA LATERAL ============
 
 st.subheader("📋 Datos generales")
 if bloqueado: st.warning("🔒 Pedido FINALIZADO.")
@@ -290,7 +264,6 @@ if pedido_actual:
     with st.expander("1. Estibas", expanded=True):
         estibas = [x for x in fotos if x.startswith("estiba_pata_")]
         
-        # --- 1. SUBIDA MANUAL (El primer paso lógico) ---
         if not bloqueado:
             st.markdown("### 📤 Subir y Procesar Fotos Nuevas")
             st.info("Sube las fotos de WhatsApp. El OCR les asignará el número de Pata y contará las cajas.")
@@ -333,16 +306,13 @@ if pedido_actual:
 
         st.divider()
 
-        # --- 2. TABLA DE REVISIÓN Y MÉTRICAS ---
         if estibas:
             st.markdown("### 📋 Resumen de Patas y Cajas")
             
-            # Si no hay OCR en memoria, creamos una tabla básica para que igual puedan borrar
             if f"ocr_result_{pedido_actual}" not in st.session_state:
                 df_estibas = pd.DataFrame([{"Pata": f.split("_")[2].replace(".jpg", ""), "Archivo": f, "Cajas": 0} for f in estibas])
                 st.session_state[f"ocr_result_{pedido_actual}"] = df_estibas
 
-            # 🔥 TABLA EDITABLE
             df_editado = st.data_editor(
                 st.session_state[f"ocr_result_{pedido_actual}"],
                 width="stretch",
@@ -359,7 +329,6 @@ if pedido_actual:
             )
             st.session_state[f"ocr_result_{pedido_actual}"] = df_editado
             
-            # 🔥 BOTÓN PARA BORRAR SELECCIÓN MÚLTIPLE
             if not bloqueado:
                 filas_seleccionadas = st.multiselect(
                     "Selecciona las fotos que deseas eliminar (puedes elegir varias):",
@@ -371,12 +340,12 @@ if pedido_actual:
                 if filas_seleccionadas:
                     if st.button("🗑️ Eliminar Fotos Seleccionadas", type="primary", width="stretch"):
                         with st.spinner("Borrando fotos..."):
+                            # 🔥 CORRECCIÓN AQUÍ: Se quitó el 4to parámetro que causaba el error
                             cant = borrar_fotos_seleccionadas(pedido_actual, df_editado, filas_seleccionadas)
                             st.success(f"✅ {cant} fotos eliminadas correctamente.")
                             time.sleep(1.5)
                             st.rerun()
 
-            # Métricas Totales
             total_patas = len(df_editado)
             try:
                 total_cajas = int(pd.to_numeric(df_editado["Cajas"], errors='coerce').fillna(0).sum())
