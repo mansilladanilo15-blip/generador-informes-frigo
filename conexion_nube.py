@@ -16,6 +16,8 @@ def obtener_cliente():
 # ==========================================
 # FUNCIONES PARA PEDIDOS (BASE DE DATOS)
 # ==========================================
+import time # Asegúrate de tener esto importado
+
 def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
