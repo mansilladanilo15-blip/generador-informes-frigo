@@ -236,90 +236,32 @@ if pedido_actual:
                     nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
                 st.rerun()
 
-    with st.expander("1. Estibas", expanded=True):
+       with st.expander("1. Estibas", expanded=True):
         estibas = [x for x in fotos if x.startswith("estiba_pata_")]
-        if estibas:
-            st.markdown("### 📋 Resumen de Patas")
-            df_estibas = pd.DataFrame([{"Pata": f.split("_")[2].replace(".jpg", ""), "Archivo": f} for f in estibas])
-            st.dataframe(df_estibas, width="stretch")
-
-            if not bloqueado:
-                if st.button("🔍 Analizar con OCR", type="secondary", key=f"btn_ocr_{RC}"):
-                    with st.spinner("Analizando fotos con OCR... ⏳"):
-                        try:
-                            from ocr_bridge import analizar_fotos
-                            fotos_para_ocr = []
-                            for f in estibas:
-                                b = nube.descargar_foto_nube(pedido_actual, f)
-                                fotos_para_ocr.append((f, b))
-
-                            resultados = analizar_fotos(fotos_para_ocr)
-
-                            # 🔥 DIAGNÓSTICO
-                            with st.expander("👁️ Ver texto detectado por el OCR (Diagnóstico)", expanded=True):
-                                for r in resultados:
-                                    st.write(f"**{r['archivo']}**")
-                                    st.code(r.get('texto_crudo', 'Nada'))
-
-                            data = []
-                            for r in resultados:
-                                data.append({
-                                    "Archivo": r["archivo"],
-                                    "Pata OCR": r.get("pata", "-"),
-                                    "Pata Final (Editable)": r.get("pata", 1),
-                                    "Cajas": r.get("total_cajas", 0)
-                                })
-                            df_ocr = pd.DataFrame(data)
-                            st.session_state[f"ocr_result_{pedido_actual}"] = df_ocr
-                        except Exception as e:
-                            st.error(f"Error en OCR: {e}")
-
-            if f"ocr_result_{pedido_actual}" in st.session_state:
-                st.markdown("### ✏️ Revisión Pata / Caja")
-                df_editado = st.data_editor(
-                    st.session_state[f"ocr_result_{pedido_actual}"],
-                    width="stretch",
-                    disabled=bloqueado
-                )
-                st.session_state[f"ocr_result_{pedido_actual}"] = df_editado
-
-                col_tabla, col_preview = st.columns([2, 1])
-                with col_tabla:
-                    st.info("Edita las cajas si es necesario. El OCR ha detectado las patas.")
-                with col_preview:
-                    archivo_sel = st.selectbox("Ver foto:", df_editado["Archivo"].tolist(), key=f"sel_ocr_{RC}")
-                    if archivo_sel:
-                        b = nube.descargar_foto_nube(pedido_actual, archivo_sel)
-                        b64 = convertir_a_base64(b, 600)
-                        st.markdown(f'<img src="{b64}" style="width:100%">', unsafe_allow_html=True)
-
+        
+        # --- 1. SUBIDA MANUAL (El primer paso lógico) ---
         if not bloqueado:
-            st.markdown("---")
-            st.markdown("### 📤 Subida Manual de Estibas (El OCR asignará las patas)")
-            fotos_manuales = st.file_uploader("Sube todas las fotos aquí", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
-
+            st.markdown("### 📤 Subir y Procesar Fotos Nuevas")
+            st.info("Sube las fotos de WhatsApp. El OCR les asignará el número de Pata y contará las cajas.")
+            fotos_manuales = st.file_uploader("Selecciona las fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
+            
             if fotos_manuales:
-                if st.button("🚀 Procesar con OCR y Guardar", type="primary", width="stretch"):
+                if st.button("🚀 Analizar y Guardar Fotos", type="primary", width="stretch"):
                     with st.spinner("El OCR está leyendo los carteles... ⏳"):
                         try:
                             from ocr_bridge import analizar_fotos
                             fotos_para_ocr = [(f.name, f.getvalue()) for f in fotos_manuales]
                             resultados = analizar_fotos(fotos_para_ocr)
-
-                            # 🔥 DIAGNÓSTICO DENTRO DE LA SUBIDA MASIVA
-                            st.markdown("#### 👁️ Diagnóstico de lectura")
-                            for r in resultados:
-                                st.write(f"**{r['archivo']}** → Pata: `{r.get('pata', 'No')}` | Texto: `{r.get('texto_crudo', 'Nada')[:60]}...`")
-
+                            
                             mapa_bytes = {f.name: f.getvalue() for f in fotos_manuales}
                             patas_guardadas = 0
                             errores = []
-
+                            
                             for r in resultados:
                                 nombre_original = r["archivo"]
                                 pata_detectada = r.get("pata")
-
-                                if pata_detectada and nombre_original in mapa_bytes:
+                                
+                                if pata_detectada and pata_detectada != 99 and nombre_original in mapa_bytes:
                                     nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
                                     nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
                                     patas_guardadas += 1
@@ -327,16 +269,60 @@ if pedido_actual:
                                     nuevo_nombre = f"estiba_pata_99.jpg"
                                     nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
                                     errores.append(nombre_original)
-
+                            
                             if errores:
-                                st.warning(f"⚠️ Se guardaron {patas_guardadas} fotos con pata detectada. Estas fotos no se pudieron asignar (se guardaron como Pata 99): {', '.join(errores)}")
+                                st.warning(f"⚠️ Se guardaron {patas_guardadas} fotos. Estas no se pudieron asignar (Pata 99): {', '.join(errores)}")
                             else:
                                 st.success(f"✅ Se guardaron {patas_guardadas} fotos correctamente.")
-
+                            
                             time.sleep(2)
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Error al procesar: {e}")
+
+        st.divider()
+
+        # --- 2. TABLA DE REVISIÓN Y MÉTRICAS ---
+        if estibas:
+            st.markdown("### 📋 Resumen de Patas y Cajas")
+            
+            # Si el usuario ya analizó, usamos esos datos para las métricas, si no, mostramos 0
+            if f"ocr_result_{pedido_actual}" in st.session_state:
+                df_editado = st.data_editor(
+                    st.session_state[f"ocr_result_{pedido_actual}"],
+                    width="stretch",
+                    disabled=bloqueado,
+                    hide_index=True
+                )
+                st.session_state[f"ocr_result_{pedido_actual}"] = df_editado
+                
+                # 🔥 MÉTRICAS TOTALES (La suma que faltaba)
+                total_patas = len(df_editado)
+                try:
+                    total_cajas = int(pd.to_numeric(df_editado["Cajas"], errors='coerce').fillna(0).sum())
+                except:
+                    total_cajas = 0
+                
+                col_m1, col_m2 = st.columns(2)
+                col_m1.metric(label="📦 Total Patas Detectadas", value=total_patas)
+                col_m2.metric(label="🧊 Total Cajas Detectadas", value=total_cajas)
+                
+                st.divider()
+                st.markdown("### ✏️ Revisión Foto por Foto")
+                col_tabla, col_preview = st.columns([1.5, 1])
+                with col_preview:
+                    archivo_sel = st.selectbox("Ver foto:", df_editado["Archivo"].tolist(), key=f"sel_ocr_{RC}")
+                    if archivo_sel:
+                        b = nube.descargar_foto_nube(pedido_actual, archivo_sel)
+                        b64 = convertir_a_base64(b, 600)
+                        st.markdown(f'<img src="{b64}" style="width:100%; border-radius:8px;">', unsafe_allow_html=True)
+                with col_tabla:
+                    st.info("Si el OCR cometió un error, puedes editar la columna 'Pata Final (Editable)' y la columna 'Cajas'.")
+            else:
+                # Si no hay OCR en memoria, mostramos un resumen básico
+                df_estibas = pd.DataFrame([{"Pata": f.split("_")[2].replace(".jpg", ""), "Archivo": f} for f in estibas])
+                st.dataframe(df_estibas, width="stretch", hide_index=True)
+                st.info("💡 Para extraer el conteo de cajas y ver las métricas, sube nuevas fotos arriba.")
 
     def seccion_extra(titulo, prefijo):
         with st.expander(titulo, expanded=False):
