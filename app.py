@@ -254,17 +254,12 @@ if pedido_actual:
                                 fotos_para_ocr.append((f, b))
                             
                             resultados = analizar_fotos(fotos_para_ocr)
-                            # 🔥 AGREGAMOS ESTO PARA VER QUÉ LEYÓ EL OCR
-                            for r in resultados:
-                            st.write(f"Foto: {r['archivo']} - Texto: {r.get('texto_crudo', 'Nada')} - Pata: {r.get('pata', 'No detectada')}")
-
-                            mapa_bytes = {f.name: f.getvalue() for f in fotos_manuales}
-                            # ... (el resto del código sigue igual)
                             
-                            if resultados:
-                                with st.expander("👁️ Ver texto detectado por el OCR (Diagnóstico)"):
-                                    for r in resultados:
-                                        st.write(f"**{r['archivo']}**: {r.get('texto_crudo', 'Nada')}")
+                            # 🔥 DIAGNÓSTICO
+                            with st.expander("👁️ Ver texto detectado por el OCR (Diagnóstico)", expanded=True):
+                                for r in resultados:
+                                    st.write(f"**{r['archivo']}**")
+                                    st.code(r.get('texto_crudo', 'Nada'))
                             
                             data = []
                             for r in resultados:
@@ -310,6 +305,11 @@ if pedido_actual:
                             from ocr_bridge import analizar_fotos
                             fotos_para_ocr = [(f.name, f.getvalue()) for f in fotos_manuales]
                             resultados = analizar_fotos(fotos_para_ocr)
+                            
+                            # 🔥 DIAGNÓSTICO DENTRO DE LA SUBIDA MASIVA
+                            st.markdown("#### 👁️ Diagnóstico de lectura")
+                            for r in resultados:
+                                st.write(f"**{r['archivo']}** → Pata: `{r.get('pata', 'No')}` | Texto: `{r.get('texto_crudo', 'Nada')[:60]}...`")
                             
                             mapa_bytes = {f.name: f.getvalue() for f in fotos_manuales}
                             patas_guardadas = 0
