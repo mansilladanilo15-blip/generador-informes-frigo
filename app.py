@@ -254,6 +254,12 @@ if pedido_actual:
                                 fotos_para_ocr.append((f, b))
                             
                             resultados = analizar_fotos(fotos_para_ocr)
+                            # 🔥 AGREGAMOS ESTO PARA VER QUÉ LEYÓ EL OCR
+                            for r in resultados:
+                            st.write(f"Foto: {r['archivo']} - Texto: {r.get('texto_crudo', 'Nada')} - Pata: {r.get('pata', 'No detectada')}")
+
+                            mapa_bytes = {f.name: f.getvalue() for f in fotos_manuales}
+                            # ... (el resto del código sigue igual)
                             
                             if resultados:
                                 with st.expander("👁️ Ver texto detectado por el OCR (Diagnóstico)"):
