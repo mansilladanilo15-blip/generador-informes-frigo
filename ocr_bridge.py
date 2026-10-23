@@ -8,11 +8,11 @@ import numpy as np
 # 🔥 IMPORTAMOS PADDLE OCR DIRECTAMENTE (se instala vía requirements.txt)
 try:
     from paddleocr import PaddleOCR
-    # Inicializamos el OCR una sola vez para que sea rápido
     ocr_model = PaddleOCR(use_angle_cls=True, lang='es', show_log=False)
 except Exception as e:
-    print(f"Error al cargar PaddleOCR: {e}")
+    # 🔥 GUARDAMOS EL ERROR REAL PARA MOSTRARLO EN LA APP
     ocr_model = None
+    error_ocr = str(e)
 
 def analizar_fotos(fotos_bytes_list):
     """
