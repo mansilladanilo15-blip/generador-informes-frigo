@@ -1,72 +1,97 @@
-import json
-import subprocess
-import tempfile
+import re
 import os
 import sys
-from pathlib import Path
+from io import BytesIO
+from PIL import Image
+import numpy as np
 
-import config
-
-# Buscar la ruta al Python del OCR
-if getattr(sys, 'frozen', False):
-    base_exe = os.path.dirname(sys.executable)
-    ruta_1 = os.path.join(base_exe, ".venv-ocr", "Scripts", "python.exe")
-    ruta_2 = os.path.join(os.path.dirname(os.path.dirname(base_exe)), ".venv-ocr", "Scripts", "python.exe")
-    
-    if os.path.exists(ruta_1):
-        PYTHON_OCR = Path(ruta_1)
-    elif os.path.exists(ruta_2):
-        PYTHON_OCR = Path(ruta_2)
-    else:
-        PYTHON_OCR = Path(r"C:\Users\dmansillan\OneDrive - Australis Mar SA\Escritorio\generador_informes\.venv-ocr\Scripts\python.exe")
-else:
-    PYTHON_OCR = config.BASE_DIR / ".venv-ocr" / "Scripts" / "python.exe"
-
-if getattr(sys, 'frozen', False):
-    OCR_RUNNER = Path(sys._MEIPASS) / "ocr_runner.py"
-else:
-    OCR_RUNNER = config.BASE_DIR / "ocr_runner.py"
-
+# 🔥 IMPORTAMOS PADDLE OCR DIRECTAMENTE (se instala vía requirements.txt)
+try:
+    from paddleocr import PaddleOCR
+    # Inicializamos el OCR una sola vez para que sea rápido
+    ocr_model = PaddleOCR(use_angle_cls=True, lang='es', show_log=False)
+except Exception as e:
+    print(f"Error al cargar PaddleOCR: {e}")
+    ocr_model = None
 
 def analizar_fotos(fotos_bytes_list):
-    if not fotos_bytes_list:
-        return []
+    """
+    Procesa una lista de fotos directamente en la nube.
+    fotos_bytes_list: [(nombre, bytes), ...]
+    """
+    if not ocr_model:
+        raise Exception("El modelo OCR no está disponible en el servidor.")
 
-    if not PYTHON_OCR.exists():
-        raise FileNotFoundError(f"No se encontró el Python del entorno OCR en:\n{PYTHON_OCR}")
-    if not OCR_RUNNER.exists():
-        raise FileNotFoundError(f"No se encontró ocr_runner.py en:\n{OCR_RUNNER}")
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
-        ruta_json = tmpdir / "resultado.json"
-        argumentos = [str(ruta_json)]
-
-        for i, (nombre, contenido) in enumerate(fotos_bytes_list, 1):
-            ext = Path(nombre).suffix or ".jpg"
-            ruta_temp = tmpdir / f"foto_{i:03d}{ext}"
-            ruta_temp.write_bytes(contenido)
-            argumentos.append(f"{nombre}|{ruta_temp}")
-
-        # Llamada directa al Python, sin shell y con entorno limpio
-        cmd = [str(PYTHON_OCR), str(OCR_RUNNER)] + argumentos
-
-        env_limpio = os.environ.copy()
-        env_limpio.pop("PYTHONPATH", None)
-        env_limpio.pop("PYTHONHOME", None)
-
-        subprocess.run(
-            cmd,
-            capture_output=False,
-            cwd=str(tmpdir),
-            timeout=600,
-            env=env_limpio
-        )
-
-        if not ruta_json.exists():
-            raise RuntimeError("El OCR falló al procesar las imágenes (no se generó el JSON).")
-
-        with open(ruta_json, "r", encoding="utf-8") as f:
-            datos = json.load(f)
-
-        return datos
+    resultados = []
+    
+    for nombre, contenido_bytes in fotos_bytes_list:
+        try:
+            # Convertimos los bytes a una imagen compatible con PaddleOCR
+            img = Image.open(BytesIO(contenido_bytes)).convert("RGB")
+            img_array = np.array(img)
+            
+            # Ejecutamos el OCR
+            resultado = ocr_model.ocr(img_array, cls=True)
+            
+            textos = []
+            confianzas = []
+            if resultado and resultado[0]:
+                for linea in resultado[0]:
+                    textos.append(linea[1][0])
+                    confianzas.append(linea[1][1])
+            
+            texto_completo = " ".join(textos)
+            texto_upper = texto_completo.upper()
+            confianza_promedio = sum(confianzas) / len(confianzas) if confianzas else 0.0
+            
+            # --- BUSCAR PATAS Y CAJAS ---
+            pata, cajas = None, None
+            candidatos = []
+            
+            if resultado and resultado[0]:
+                for linea in resultado[0]:
+                    texto = linea[1][0]
+                    conf = linea[1][1]
+                    match = re.search(r'(\d{1,3})\s*[/\s]\s*(\d{1,4})', texto)
+                    if match:
+                        num1 = int(match.group(1))
+                        num2 = int(match.group(2))
+                        es_fecha = (num1 <= 31 and num2 <= 12)
+                        if not es_fecha:
+                            candidatos.append({"num1": num1, "num2": num2, "confianza": conf})
+            
+            if candidatos:
+                buenos = [c for c in candidatos if c["confianza"] >= 0.80]
+                mejor = max(buenos, key=lambda c: c["confianza"]) if buenos else max(candidatos, key=lambda c: c["confianza"])
+                pata = mejor["num1"]
+                cajas = mejor["num2"]
+            
+            # Buscar otros datos
+            match_entrega = re.search(r'\b(\d{7,8})\b', texto_upper)
+            entrega = match_entrega.group(1) if match_entrega else None
+            
+            match_fecha = re.search(r'\b(\d{1,2}/\d{1,2}/\d{2,4})\b', texto_upper)
+            fecha = match_fecha.group(1) if match_fecha else None
+            
+            resultados.append({
+                "archivo": nombre,
+                "pata": pata,
+                "total_cajas": cajas,
+                "nro_entrega": entrega,
+                "fecha": fecha,
+                "texto_crudo": texto_completo,
+                "confianza": round(confianza_promedio, 3)
+            })
+            
+        except Exception as e:
+            resultados.append({
+                "archivo": nombre,
+                "pata": None,
+                "total_cajas": None,
+                "nro_entrega": None,
+                "fecha": None,
+                "texto_crudo": f"ERROR PROCESANDO: {e}",
+                "confianza": 0.0
+            })
+            
+    return resultados
