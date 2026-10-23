@@ -8,22 +8,21 @@ import numpy as np
 # 🔥 IMPORTAMOS PADDLE OCR DIRECTAMENTE (se instala vía requirements.txt)
 try:
     from paddleocr import PaddleOCR
+    # Inicializamos el OCR una sola vez para que sea rápido
     ocr_model = PaddleOCR(use_angle_cls=True, lang='es', show_log=False)
+    error_ocr = None
 except Exception as e:
-    # 🔥 GUARDAMOS EL ERROR REAL PARA MOSTRARLO EN LA APP
     ocr_model = None
     error_ocr = str(e)
+
 
 def analizar_fotos(fotos_bytes_list):
     """
     Procesa una lista de fotos directamente en la nube.
     fotos_bytes_list: [(nombre, bytes), ...]
     """
-if not ocr_model:
-    # Mostramos el error real que ocurrió al cargar el modelo
-    import streamlit as st
-    st.error(f"Error al cargar PaddleOCR: {error_ocr}")
-    raise Exception(f"El modelo OCR no está disponible. Detalle: {error_ocr}")
+    if not ocr_model:
+        raise Exception(f"El modelo OCR no está disponible. Detalle: {error_ocr}")
 
     resultados = []
     
