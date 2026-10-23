@@ -250,7 +250,7 @@ if pedido_actual:
             df_estibas = pd.DataFrame([{"Pata": f.split("_")[2].replace(".jpg", ""), "Archivo": f} for f in estibas])
             st.dataframe(df_estibas, use_container_width=True)
             
-            # Botón OCR
+                       # Botón OCR
             if not bloqueado:
                 if st.button("🔍 Analizar con OCR", type="secondary", key=f"btn_ocr_{RC}"):
                     with st.spinner("Analizando fotos con OCR... ⏳"):
@@ -263,12 +263,17 @@ if pedido_actual:
                             
                             resultados = analizar_fotos(fotos_para_ocr)
                             
+                            # 🔥 DIAGNÓSTICO: Mostramos el texto crudo para ver qué leyó realmente
+                            if resultados:
+                                with st.expander("👁️ Ver texto detectado por el OCR (Diagnóstico)"):
+                                    for r in resultados:
+                                        st.write(f"**{r['archivo']}**: {r.get('texto_crudo', 'Nada')}")
+                            
                             # Mostramos los resultados en un editor
                             data = []
                             for r in resultados:
                                 data.append({
                                     "Archivo": r["archivo"],
-                                    "Pata Operario": r.get("pata_operario", "-"),
                                     "Pata OCR": r.get("pata", "-"),
                                     "Pata Final (Editable)": r.get("pata", 1),
                                     "Cajas": r.get("total_cajas", 0)
@@ -315,6 +320,7 @@ if pedido_actual:
                             
                             mapa_bytes = {f.name: f.getvalue() for f in fotos_manuales}
                             patas_guardadas = 0
+                            errores = []
                             
                             for r in resultados:
                                 nombre_original = r["archivo"]
@@ -324,13 +330,21 @@ if pedido_actual:
                                     nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
                                     nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
                                     patas_guardadas += 1
+                                else:
+                                    # 🔥 SI NO DETECTA LA PATA, LA GUARDAMOS CON UN NOMBRE GENÉRICO PARA NO PERDERLA
+                                    nuevo_nombre = f"estiba_pata_99.jpg"
+                                    nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
+                                    errores.append(nombre_original)
                             
-                            st.success(f"✅ Se guardaron {patas_guardadas} fotos correctamente.")
-                            time.sleep(1.5)
+                            if errores:
+                                st.warning(f"⚠️ Se guardaron {patas_guardadas} fotos con pata detectada. Estas fotos no se pudieron asignar (se guardaron como Pata 99): {', '.join(errores)}")
+                            else:
+                                st.success(f"✅ Se guardaron {patas_guardadas} fotos correctamente.")
+                            
+                            time.sleep(2)
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Error al procesar: {e}")
-
     # 2, 3, 4, 5
     def seccion_extra(titulo, prefijo):
         with st.expander(titulo, expanded=False):
