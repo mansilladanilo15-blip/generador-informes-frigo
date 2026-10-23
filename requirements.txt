@@ -8,3 +8,4 @@ requests
 paddleocr
 paddlepaddle
 opencv-python-headless
+numpy
