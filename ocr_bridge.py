@@ -10,18 +10,16 @@ try:
     from paddleocr import PaddleOCR
     import paddle
 
-    # Forzamos CPU (esto ya lo tenías y está bien)
+    # Forzamos CPU
     paddle.set_device('cpu')
 
-# 1. Cambia la inicialización del modelo:
-ocr_model = PaddleOCR(
-    lang='en',
-    use_textline_orientation=True,  # ✅ Reemplaza a use_angle_cls y cls=True
-    # use_angle_cls ya no es necesario
-)
-
-# 2. Cambia la llamada al OCR (elimina cls=True):
-resultado = ocr_model.ocr(img_array)  # ✅ Sin el parámetro cls
+    # ✅ En PaddleOCR 3.x: use_textline_orientation reemplaza a use_angle_cls
+    #    y NO se debe pasar cls=True en .ocr()
+    ocr_model = PaddleOCR(
+        lang='en',
+        use_textline_orientation=True,
+    )
+    error_ocr = None
 except Exception as e:
     ocr_model = None
     error_ocr = str(e)
@@ -50,8 +48,8 @@ def analizar_fotos(fotos_bytes_list):
 
             img_array = np.array(img)
 
-            # Ejecutamos el OCR (en 3.x, .ocr sigue funcionando, aunque .predict es lo nuevo)
-            resultado = ocr_model.ocr(img_array, cls=True)
+            # ✅ En PaddleOCR 3.x, .ocr() ya NO acepta cls=True
+            resultado = ocr_model.ocr(img_array)
 
             textos = []
             confianzas = []
