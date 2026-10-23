@@ -17,6 +17,8 @@ if "reinicio_count" not in st.session_state:
     st.session_state["reinicio_count"] = 0
 if "fotos_ocultas" not in st.session_state:
     st.session_state["fotos_ocultas"] = set()
+if "cajas_temporales" not in st.session_state:
+    st.session_state["cajas_temporales"] = {} # 🔥 Memoria para guardar las cajas detectadas
 
 RC = st.session_state["reinicio_count"]
 
@@ -104,13 +106,12 @@ def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
     for f in nombres_a_borrar:
         nube.borrar_foto_nube(pedido_id, f)
         st.session_state["fotos_ocultas"].add(f)
+        # 🔥 Borramos también sus cajas de la memoria
+        if f in st.session_state["cajas_temporales"]:
+            del st.session_state["cajas_temporales"][f]
         
     st.cache_data.clear()
     
-    # Limpieza profunda de memoria
-    if f"ocr_result_{pedido_id}" in st.session_state:
-        del st.session_state[f"ocr_result_{pedido_id}"]
-        
     key_multiselect = f"sel_borrar_estibas_{pedido_id}"
     if key_multiselect in st.session_state:
         del st.session_state[key_multiselect]
@@ -197,6 +198,7 @@ with st.sidebar:
                     st.session_state["pedido_actual_id"] = p["id"]
                     st.session_state["reinicio_count"] += 1
                     st.session_state["fotos_ocultas"] = set()
+                    st.session_state["cajas_temporales"] = {} # Limpiamos cajas al cambiar pedido
                     st.rerun()
 
         if pendientes:
@@ -272,8 +274,8 @@ if pedido_actual:
                     nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
                 st.rerun()
 
+    # 🔥 ESTE ES EL BLOQUE DE ESTIBAS QUE DEBES REEMPLAZAR
     with st.expander("1. Estibas", expanded=True):
-        # Filtramos las fotos que no han sido borradas manualmente
         estibas = [x for x in fotos if x.startswith("estiba_pata_") and x not in st.session_state["fotos_ocultas"]]
         
         if not bloqueado:
@@ -284,7 +286,6 @@ if pedido_actual:
             if fotos_manuales:
                 if st.button("🚀 Analizar y Guardar Fotos", type="primary", width="stretch"):
                     
-                    # 🔥 BARRA DE PROGRESO
                     progreso = st.progress(0)
                     texto_progreso = st.empty()
                     
@@ -294,36 +295,34 @@ if pedido_actual:
                     patas_guardadas = 0
                     errores = []
                     
-                    # 🔥 PROCESAMIENTO FOTO POR FOTO
                     for idx, foto in enumerate(fotos_manuales):
                         texto_progreso.info(f"⏳ Procesando foto {idx + 1} de {total_fotos}: {foto.name}")
                         
-                        # Analizamos UNA sola foto a la vez
                         resultados = analizar_fotos([(foto.name, foto.getvalue())])
                         
                         for r in resultados:
                             pata_detectada = r.get("pata")
+                            cajas_detectadas = r.get("total_cajas", 0)
                             
                             if pata_detectada and pata_detectada != 99:
-                                # Verificamos si ya existe una foto con esa pata para no borrarla
                                 nombre_base = f"estiba_pata_{pata_detectada}"
                                 versiones = [x for x in estibas if x.startswith(nombre_base)]
                                 
                                 if not versiones:
                                     nuevo_nombre = f"{nombre_base}.jpg"
                                 else:
-                                    # Si ya existe, le agregamos una letra (A, B, C...)
                                     letra = chr(65 + len(versiones))
                                     nuevo_nombre = f"{nombre_base}_{letra}.jpg"
                                 
                                 nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[foto.name])
+                                
+                                # 🔥 GUARDAMOS LAS CAJAS EN MEMORIA
+                                st.session_state["cajas_temporales"][nuevo_nombre] = cajas_detectadas
                                 patas_guardadas += 1
                             else:
-                                # Si el OCR falla, lo guardamos como pata 99
                                 nube.subir_foto_nube(pedido_actual, f"estiba_pata_99.jpg", mapa_bytes[foto.name])
                                 errores.append(foto.name)
                         
-                        # Actualizamos la barra
                         progreso.progress((idx + 1) / total_fotos)
                     
                     texto_progreso.empty()
@@ -343,16 +342,18 @@ if pedido_actual:
         if estibas:
             st.markdown("### 📋 Resumen de Patas y Cajas")
             
-            # 🔥 CONSTRUIMOS LA TABLA DESDE CERO USANDO LAS FOTOS REALES
             datos_tabla = []
             for f in estibas:
-                # Extraer el número de pata del nombre (ej: estiba_pata_15_A.jpg -> 15)
                 pata_num = f.split("_")[2].replace(".jpg", "").split("_")[0]
+                
+                # 🔥 LEER LAS CAJAS DESDE LA MEMORIA
+                cajas_guardadas = st.session_state["cajas_temporales"].get(f, 0)
+                
                 datos_tabla.append({
                     "Archivo": f,
                     "Pata OCR": int(pata_num) if pata_num.isdigit() else 0,
                     "Pata Final (Editable)": int(pata_num) if pata_num.isdigit() else 0,
-                    "Cajas": 0
+                    "Cajas": cajas_guardadas
                 })
                 
             df_editado = pd.DataFrame(datos_tabla)
