@@ -48,10 +48,15 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
     cols = st.columns(cols_num)
     for i, f in enumerate(fotos):
         with cols[i % cols_num]:
-            bytes_img = nube.descargar_foto_nube(pedido_id, f)
-            b64 = convertir_a_base64(bytes_img, max_ancho=400)
-            if b64:
-                st.markdown(f'<img src="{b64}" style="width:100%; border:1px solid #ddd; border-radius:6px; margin-bottom:6px;">', unsafe_allow_html=True)
+            # 🔥 Usamos un caché temporal con st.empty() para que desaparezca al borrar
+            img_placeholder = st.empty()
+            try:
+                bytes_img = nube.descargar_foto_nube(pedido_id, f)
+                b64 = convertir_a_base64(bytes_img, max_ancho=400)
+                if b64:
+                    img_placeholder.markdown(f'<img src="{b64}" style="width:100%; border:1px solid #ddd; border-radius:6px; margin-bottom:6px;">', unsafe_allow_html=True)
+            except Exception:
+                img_placeholder.warning("⚠️ Error al cargar")
 
             col1, col2 = st.columns(2)
             with col1:
@@ -59,10 +64,12 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
                     mostrar_zoom(f, bytes_img)
             with col2:
                 if st.button("🗑️ Borrar", key=f"{key}_del_{i}_{RC}", width="stretch"):
-                    nube.borrar_foto_nube(pedido_id, f)
-                    st.success("Foto eliminada.")
-                    time.sleep(1.5)
-                    st.rerun()
+                    with st.spinner("Borrando..."):
+                        nube.borrar_foto_nube(pedido_id, f)
+                        # 🔥 Forzamos la limpieza del caché de Streamlit para esta foto
+                        st.cache_data.clear() 
+                        time.sleep(0.5) # Damos medio segundo para que la nube procese el borrado
+                        st.rerun()
 
             opciones = ["Mantener aquí", "Mover a Documentación", "Mover a Camión", "Mover a Termógrafo", "Mover a Sello", "Mover a Thermo-king"]
             opciones_filtradas = [op for op in opciones if op != f"Mover a {key.capitalize()}"]
@@ -76,9 +83,9 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
                     bytes_foto = nube.descargar_foto_nube(pedido_id, f)
                     nube.subir_foto_nube(pedido_id, nuevo_nombre, bytes_foto)
                     nube.borrar_foto_nube(pedido_id, f)
-
-                    st.success(f"Foto movida a {destino}.")
-                    time.sleep(1.5)
+                    
+                    st.cache_data.clear()
+                    time.sleep(0.5)
                     st.rerun()
 
 def val(key, default=""):
