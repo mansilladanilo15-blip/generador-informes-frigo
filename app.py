@@ -15,6 +15,9 @@ st.set_page_config(page_title="Generador de Informes", page_icon="📄", layout=
 
 if "reinicio_count" not in st.session_state:
     st.session_state["reinicio_count"] = 0
+if "fotos_ocultas" not in st.session_state:
+    st.session_state["fotos_ocultas"] = set() # 🔥 MEMORIA PARA FOTOS BORRADAS
+
 RC = st.session_state["reinicio_count"]
 
 st.title("📄 Generador de Informes de Pedidos y Traslados")
@@ -43,12 +46,16 @@ def mostrar_zoom(nombre_foto, bytes_foto):
     if st.button("❌ Cerrar", width="stretch", key="close_modal"):
         st.rerun()
 
+# 🔥 FUNCIÓN DE GALERÍA CORREGIDA
 def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
+    # Filtramos las fotos que el usuario acaba de borrar
+    fotos = [f for f in fotos if f not in st.session_state["fotos_ocultas"]]
+    
     if not fotos: return
     cols = st.columns(cols_num)
+    
     for i, f in enumerate(fotos):
         with cols[i % cols_num]:
-            # 🔥 Usamos un caché temporal con st.empty() para que desaparezca al borrar
             img_placeholder = st.empty()
             try:
                 bytes_img = nube.descargar_foto_nube(pedido_id, f)
@@ -60,23 +67,27 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
 
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔍 Ver", key=f"{key}_zoom_{i}_{RC}", width="stretch"):
+                if st.button("🔍 Ver", key=f"{key}_zoom_{i}_{RC}_{f}", width="stretch"):
                     mostrar_zoom(f, bytes_img)
             with col2:
-                if st.button("🗑️ Borrar", key=f"{key}_del_{i}_{RC}", width="stretch"):
+                if st.button("🗑️ Borrar", key=f"{key}_del_{i}_{RC}_{f}", width="stretch"):
                     with st.spinner("Borrando..."):
                         nube.borrar_foto_nube(pedido_id, f)
-                        # 🔥 Forzamos la limpieza del caché de Streamlit para esta foto
-                        st.cache_data.clear() 
-                        time.sleep(0.5) # Damos medio segundo para que la nube procese el borrado
+                        
+                        # 🔥 Guardamos la foto en la lista negra para que desaparezca de la pantalla
+                        st.session_state["fotos_ocultas"].add(f)
+                        # 🔥 Limpiamos el caché de Streamlit
+                        st.cache_data.clear()
+                        
+                        time.sleep(0.5)
                         st.rerun()
 
             opciones = ["Mantener aquí", "Mover a Documentación", "Mover a Camión", "Mover a Termógrafo", "Mover a Sello", "Mover a Thermo-king"]
             opciones_filtradas = [op for op in opciones if op != f"Mover a {key.capitalize()}"]
-            destino = st.selectbox("Mover foto a:", opciones_filtradas, key=f"derivar_{key}_{i}_{RC}", label_visibility="collapsed")
+            destino = st.selectbox("Mover foto a:", opciones_filtradas, key=f"derivar_{key}_{i}_{RC}_{f}", label_visibility="collapsed")
 
             if destino != "Mantener aquí":
-                if st.button("➡️ Confirmar", key=f"btn_mover_{key}_{i}_{RC}", width="stretch"):
+                if st.button("➡️ Confirmar", key=f"btn_mover_{key}_{i}_{RC}_{f}", width="stretch"):
                     prefijo = {"Mover a Documentación": "documentacion_", "Mover a Camión": "camion_", "Mover a Termógrafo": "termografo_", "Mover a Sello": "sello_", "Mover a Thermo-king": "thermoking_"}[destino]
                     nuevo_nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
 
@@ -84,6 +95,7 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
                     nube.subir_foto_nube(pedido_id, nuevo_nombre, bytes_foto)
                     nube.borrar_foto_nube(pedido_id, f)
                     
+                    st.session_state["fotos_ocultas"].add(f)
                     st.cache_data.clear()
                     time.sleep(0.5)
                     st.rerun()
@@ -147,14 +159,13 @@ if modo == "📋 Gestión de Pedidos":
 pedido_actual = st.session_state.get("pedido_actual_id", "")
 bloqueado = False
 
-# Obtener todos los pedidos para el menú lateral y validar estado
 pedidos_nube = nube.obtener_pedidos_nube()
 
 if pedido_actual:
     for p in pedidos_nube:
         if p['id'] == pedido_actual:
             bloqueado = (p.get('estado') == 'Finalizado')
-            st.session_state["cargar_ultimo"] = p # Sincronizar datos del pedido actual
+            st.session_state["cargar_ultimo"] = p
 
 # ============ BARRA LATERAL (NAVEGACIÓN) ============
 with st.sidebar:
@@ -163,14 +174,11 @@ with st.sidebar:
     if not pedidos_nube:
         st.info("No hay pedidos creados.")
     else:
-        # Separar pedidos
         pendientes = [p for p in pedidos_nube if p.get('estado') != 'Finalizado']
         finalizados = [p for p in pedidos_nube if p.get('estado') == 'Finalizado']
         
-        # Función para crear los botones
         def boton_pedido(p, icono):
             label = f"{icono} {p['nro_pedido']} - {p['cliente'][:15]}..."
-            # Si es el pedido actual, resaltarlo en negrita
             if p['id'] == pedido_actual:
                 st.button(label, key=f"nav_{p['id']}", type="primary", width="stretch", disabled=True)
             else:
@@ -178,15 +186,15 @@ with st.sidebar:
                     st.session_state["cargar_ultimo"] = p
                     st.session_state["pedido_actual_id"] = p["id"]
                     st.session_state["reinicio_count"] += 1
+                    # Limpiamos las fotos ocultas al cambiar de pedido
+                    st.session_state["fotos_ocultas"] = set()
                     st.rerun()
 
-        # Mostrar Pendientes
         if pendientes:
             st.markdown("**🟡 Pendientes**")
             for p in pendientes:
                 boton_pedido(p, "📦")
                 
-        # Mostrar Finalizados
         if finalizados:
             st.divider()
             st.markdown("**🟢 Finalizados**")
@@ -202,8 +210,6 @@ with st.sidebar:
 
 st.subheader("📋 Datos generales")
 if bloqueado: st.warning("🔒 Pedido FINALIZADO.")
-
-# ... (El resto del código sigue exactamente igual a partir del formulario de datos) ...
 
 with st.form("datos"):
     c1, c2, c3 = st.columns(3)
@@ -265,7 +271,6 @@ if pedido_actual:
     with st.expander("1. Estibas", expanded=True):
         estibas = [x for x in fotos if x.startswith("estiba_pata_")]
         
-        # --- 1. SUBIDA MANUAL (El primer paso lógico) ---
         if not bloqueado:
             st.markdown("### 📤 Subir y Procesar Fotos Nuevas")
             st.info("Sube las fotos de WhatsApp. El OCR les asignará el número de Pata y contará las cajas.")
@@ -308,7 +313,6 @@ if pedido_actual:
 
         st.divider()
 
-        # --- 2. TABLA DE REVISIÓN Y MÉTRICAS ---
         if estibas:
             st.markdown("### 📋 Resumen de Patas y Cajas")
             
