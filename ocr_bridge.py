@@ -5,7 +5,6 @@ from io import BytesIO
 from PIL import Image
 import numpy as np
 
-# 🔥 1. LIMITAR HILOS A NIVEL DE SISTEMA
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
@@ -64,32 +63,30 @@ def analizar_fotos(fotos_bytes_list):
                     confianzas = getattr(res, 'rec_scores', [])
 
             texto_completo = " ".join(textos)
+            # Limpiamos el texto de espacios extra
             texto_upper = texto_completo.upper()
             confianza_promedio = sum(confianzas) / len(confianzas) if confianzas else 0.0
 
-            # --- 🔥 LÓGICA CORREGIDA PARA PATA Y CAJAS 🔥 ---
+            # --- 🔥 LÓGICA ESTRICTA BASADA EN LA FOTO 🔥 ---
             pata, cajas = None, None
-            entrega = None
 
-            # 1. Buscar el patrón central: "15/52" (Pata/Cajas)
-            # Busca números de 1 a 3 dígitos, una barra, y números de 1 a 4 dígitos.
-            # Ej: 15/52, 4/120, 01/50
-            match_central = re.search(r'\b(\d{1,3})\s*/\s*(\d{1,4})\b', texto_upper)
+            # 1. Buscar el patrón "NÚMERO / NÚMERO" (Ej: 9/55, 15 / 52)
+            # Esto captura específicamente el número de pata y de cajas en el centro.
+            match = re.search(r'(\d{1,2})\s*[\/|]\s*(\d{1,4})', texto_upper)
             
-            if match_central:
-                pata = int(match_central.group(1))
-                cajas = int(match_central.group(2))
-            else:
-                # Si el OCR falló con la barra, intentar con un espacio (ej: "15 52")
-                match_espacio = re.search(r'\b(\d{1,2})\s+(\d{1,4})\b', texto_upper)
+            if match:
+                pata = int(match.group(1))
+                cajas = int(match.group(2))
+            
+            # 2. Si por alguna razón el OCR falló y no encontró la barra, 
+            # buscamos si hay dos números juntos (ej: 9 55)
+            if pata is None or cajas is None:
+                match_espacio = re.search(r'\b(\d{1,2})\s+(\d{2,4})\b', texto_upper)
                 if match_espacio:
-                    pata = int(match_espacio.group(1))
-                    cajas = int(match_espacio.group(2))
-
-            # 2. Buscar el N° de Entrega (7 u 8 dígitos, ej: 8054669)
-            match_entrega = re.search(r'\b(\d{7,8})\b', texto_upper)
-            if match_entrega:
-                entrega = match_entrega.group(1)
+                    # Validamos que el primer número sea menor a 50 (para no confundir con la entrega)
+                    if int(match_espacio.group(1)) < 50:
+                        pata = int(match_espacio.group(1))
+                        cajas = int(match_espacio.group(2))
 
             # 3. Si aún no hay pata, mandar a 99. Si no hay cajas, poner 0.
             if pata is None:
@@ -101,7 +98,6 @@ def analizar_fotos(fotos_bytes_list):
                 "archivo": nombre,
                 "pata": pata,
                 "total_cajas": cajas,
-                "nro_entrega": entrega,
                 "texto_crudo": texto_completo,
                 "confianza": round(confianza_promedio, 3)
             })
@@ -111,7 +107,6 @@ def analizar_fotos(fotos_bytes_list):
                 "archivo": nombre,
                 "pata": None,
                 "total_cajas": None,
-                "nro_entrega": None,
                 "texto_crudo": f"ERROR PROCESANDO: {e}",
                 "confianza": 0.0
             })
