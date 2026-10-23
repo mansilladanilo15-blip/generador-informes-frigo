@@ -4,6 +4,7 @@ import json
 import requests
 import tempfile
 import os
+import time
 
 # 🔥 PON AQUÍ TUS LLAVES DE SUPABASE
 SUPABASE_URL = "https://ipqcwszkjpswvajtnzhh.supabase.co"
@@ -15,34 +16,25 @@ def obtener_cliente():
 # ==========================================
 # FUNCIONES PARA PEDIDOS (BASE DE DATOS)
 # ==========================================
-import time # Asegúrate de tener esto importado arriba
-
-def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
-    supabase = obtener_cliente()
-    ruta_nube = f"{pedido_id}/{nombre_archivo}"
+def subir_pedido_nube(pedido_id, datos_dict):
+    datos_json = json.dumps(datos_dict, ensure_ascii=False)
+    url = f"{SUPABASE_URL}/rest/v1/pedidos"
     
-    # Creamos un archivo temporal real en el servidor
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-        tmp.write(bytes(contenido_bytes))
-        ruta_temporal = tmp.name
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+    }
     
-    try:
-        # 🔥 USAMOS UPSERT PARA SOBRESCRIBIR SI YA EXISTE
-        with open(ruta_temporal, "rb") as f:
-            supabase.storage.from_("fotos").upload(
-                path=ruta_nube,
-                file=f,
-                file_options={
-                    "content-type": "image/jpeg",
-                    "upsert": "true"  # <-- ESTO PERMITE SOBRESCRIBIR
-                }
-            )
-    finally:
-        # Borramos el archivo temporal
-        if os.path.exists(ruta_temporal):
-            os.remove(ruta_temporal)
-        
-    return supabase.storage.from_("fotos").get_public_url(ruta_nube)
+    payload = {"id": pedido_id, "datos_json": datos_json}
+    respuesta = requests.post(url, headers=headers, json=payload)
+    
+    if respuesta.status_code == 409:
+        url_update = f"{url}?id=eq.{pedido_id}"
+        requests.patch(url_update, headers=headers, json=payload)
+    elif respuesta.status_code >= 400:
+        raise Exception(f"Error {respuesta.status_code}: {respuesta.text}")
 
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
@@ -74,27 +66,24 @@ def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
     
-    # 1. Intentamos borrar la foto si ya existe (para evitar el error de duplicado 409)
-    try:
-        supabase.storage.from_("fotos").remove([ruta_nube])
-    except Exception:
-        pass # Si no existe, no pasa nada, ignoramos el error
-    
-    # 2. Creamos un archivo temporal real en el servidor
+    # 1. Creamos un archivo temporal real en el servidor
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         tmp.write(bytes(contenido_bytes))
         ruta_temporal = tmp.name
     
     try:
-        # 3. Lo subimos SIN la opción upsert (para no chocar con la política SELECT)
+        # 2. Lo subimos usando upsert para sobrescribir si ya existe
         with open(ruta_temporal, "rb") as f:
             supabase.storage.from_("fotos").upload(
                 path=ruta_nube,
                 file=f,
-                file_options={"content-type": "image/jpeg"}
+                file_options={
+                    "content-type": "image/jpeg",
+                    "upsert": "true"  # 🔥 ESTO EVITA EL ERROR 409
+                }
             )
     finally:
-        # 4. Borramos el archivo temporal
+        # 3. Borramos el archivo temporal
         if os.path.exists(ruta_temporal):
             os.remove(ruta_temporal)
         
