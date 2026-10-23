@@ -18,7 +18,7 @@ try:
     def obtener_ocr():
         if not hasattr(_ocr_local, "model"):
             _ocr_local.model = PaddleOCR(
-                lang='en',
+                lang='es',                # 🔥 Volvemos a Español para leer mejor "PATA/CAJAS"
                 use_textline_orientation=True,
                 enable_mkldnn=False,
                 cpu_threads=1,        
@@ -42,7 +42,8 @@ def analizar_fotos(fotos_bytes_list):
             ocr_model = obtener_ocr()
             img = Image.open(BytesIO(contenido_bytes)).convert("RGB")
 
-            max_lado = 1000  
+            # Mantenemos un buen tamaño para que los números gruesos se lean bien
+            max_lado = 1200  
             if max(img.width, img.height) > max_lado:
                 ratio = max_lado / max(img.width, img.height)
                 img = img.resize((int(img.width * ratio), int(img.height * ratio)))
@@ -63,32 +64,34 @@ def analizar_fotos(fotos_bytes_list):
                     confianzas = getattr(res, 'rec_scores', [])
 
             texto_completo = " ".join(textos)
-            # Limpiamos el texto de espacios extra
             texto_upper = texto_completo.upper()
             confianza_promedio = sum(confianzas) / len(confianzas) if confianzas else 0.0
 
-            # --- 🔥 LÓGICA ESTRICTA BASADA EN LA FOTO 🔥 ---
+            # --- 🔥 LÓGICA DE BÚSQUEDA BASADA EN TU CARTEL 🔥 ---
             pata, cajas = None, None
 
-            # 1. Buscar el patrón "NÚMERO / NÚMERO" (Ej: 9/55, 15 / 52)
-            # Esto captura específicamente el número de pata y de cajas en el centro.
-            match = re.search(r'(\d{1,2})\s*[\/|]\s*(\d{1,4})', texto_upper)
+            # 1. Buscamos el formato exacto del cartel: PATA/CAJAS X/Y
+            # \D* significa "cualquier cosa que no sea un número" (por si el OCR lee "PATA/CAJAS 11/54" o "PATAS/CAJAS 11/54")
+            match_cartel = re.search(r'PATA[S]?\s*[/\\]\s*CAJA[S]?\D*(\d{1,3})\s*[\/\\]\s*(\d{1,4})', texto_upper)
             
-            if match:
-                pata = int(match.group(1))
-                cajas = int(match.group(2))
-            
-            # 2. Si por alguna razón el OCR falló y no encontró la barra, 
-            # buscamos si hay dos números juntos (ej: 9 55)
-            if pata is None or cajas is None:
-                match_espacio = re.search(r'\b(\d{1,2})\s+(\d{2,4})\b', texto_upper)
-                if match_espacio:
-                    # Validamos que el primer número sea menor a 50 (para no confundir con la entrega)
-                    if int(match_espacio.group(1)) < 50:
-                        pata = int(match_espacio.group(1))
-                        cajas = int(match_espacio.group(2))
+            if match_cartel:
+                pata = int(match_cartel.group(1))
+                cajas = int(match_cartel.group(2))
+            else:
+                # 2. Si el OCR no leyó "PATA/CAJAS" por alguna sombra, buscamos cualquier "X/Y"
+                # pero filtramos para que NO sea la fecha (que tiene 2 barras) ni la entrega.
+                # Buscamos algo que tenga entre 1 y 3 dígitos, barra, y 1 a 4 dígitos.
+                matches = re.finditer(r'\b(\d{1,3})\s*[\/\\]\s*(\d{1,4})\b', texto_upper)
+                for m in matches:
+                    num1 = int(m.group(1))
+                    num2 = int(m.group(2))
+                    # Si no parece una fecha (día/mes) y num1 es menor a 99, lo tomamos
+                    if not (num1 <= 31 and num2 <= 12) and num1 <= 99:
+                        pata = num1
+                        cajas = num2
+                        break
 
-            # 3. Si aún no hay pata, mandar a 99. Si no hay cajas, poner 0.
+            # 3. Si de todas formas falló, que quede en 99 para que lo revises
             if pata is None:
                 pata = 99 
             if cajas is None:
