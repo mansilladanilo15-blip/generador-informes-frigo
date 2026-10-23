@@ -28,7 +28,7 @@ def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
         ruta_temporal = tmp.name
     
     try:
-        # 2. Lo subimos SIN UPSERT (esto evita el error 403)
+        # 2. Lo subimos SIN UPSERT
         with open(ruta_temporal, "rb") as f:
             supabase.storage.from_("fotos").upload(
                 path=ruta_nube,
