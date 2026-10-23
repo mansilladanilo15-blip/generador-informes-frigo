@@ -273,7 +273,8 @@ if pedido_actual:
                 st.rerun()
 
     with st.expander("1. Estibas", expanded=True):
-        estibas = [x for x in fotos if x.startswith("estiba_pata_")]
+        # Filtramos las fotos que no han sido borradas manualmente
+        estibas = [x for x in fotos if x.startswith("estiba_pata_") and x not in st.session_state["fotos_ocultas"]]
         
         if not bloqueado:
             st.markdown("### 📤 Subir y Procesar Fotos Nuevas")
@@ -282,39 +283,60 @@ if pedido_actual:
             
             if fotos_manuales:
                 if st.button("🚀 Analizar y Guardar Fotos", type="primary", width="stretch"):
-                    with st.spinner("El OCR está leyendo los carteles... ⏳"):
-                        try:
-                            from ocr_bridge import analizar_fotos
-                            fotos_para_ocr = [(f.name, f.getvalue()) for f in fotos_manuales]
-                            resultados = analizar_fotos(fotos_para_ocr)
+                    
+                    # 🔥 BARRA DE PROGRESO
+                    progreso = st.progress(0)
+                    texto_progreso = st.empty()
+                    
+                    from ocr_bridge import analizar_fotos
+                    mapa_bytes = {f.name: f.getvalue() for f in fotos_manuales}
+                    total_fotos = len(fotos_manuales)
+                    patas_guardadas = 0
+                    errores = []
+                    
+                    # 🔥 PROCESAMIENTO FOTO POR FOTO
+                    for idx, foto in enumerate(fotos_manuales):
+                        texto_progreso.info(f"⏳ Procesando foto {idx + 1} de {total_fotos}: {foto.name}")
+                        
+                        # Analizamos UNA sola foto a la vez
+                        resultados = analizar_fotos([(foto.name, foto.getvalue())])
+                        
+                        for r in resultados:
+                            pata_detectada = r.get("pata")
                             
-                            mapa_bytes = {f.name: f.getvalue() for f in fotos_manuales}
-                            patas_guardadas = 0
-                            errores = []
-                            
-                            for r in resultados:
-                                nombre_original = r["archivo"]
-                                pata_detectada = r.get("pata")
+                            if pata_detectada and pata_detectada != 99:
+                                # Verificamos si ya existe una foto con esa pata para no borrarla
+                                nombre_base = f"estiba_pata_{pata_detectada}"
+                                versiones = [x for x in estibas if x.startswith(nombre_base)]
                                 
-                                if pata_detectada and pata_detectada != 99 and nombre_original in mapa_bytes:
-                                    nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
-                                    nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
-                                    patas_guardadas += 1
+                                if not versiones:
+                                    nuevo_nombre = f"{nombre_base}.jpg"
                                 else:
-                                    nuevo_nombre = f"estiba_pata_99.jpg"
-                                    nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
-                                    errores.append(nombre_original)
-                            
-                            if errores:
-                                st.warning(f"⚠️ Se guardaron {patas_guardadas} fotos. Estas no se pudieron asignar (Pata 99): {', '.join(errores)}")
+                                    # Si ya existe, le agregamos una letra (A, B, C...)
+                                    letra = chr(65 + len(versiones))
+                                    nuevo_nombre = f"{nombre_base}_{letra}.jpg"
+                                
+                                nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[foto.name])
+                                patas_guardadas += 1
                             else:
-                                st.success(f"✅ Se guardaron {patas_guardadas} fotos correctamente.")
-                            
-                            st.session_state["reinicio_count"] += 1
-                            time.sleep(2)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Error al procesar: {e}")
+                                # Si el OCR falla, lo guardamos como pata 99
+                                nube.subir_foto_nube(pedido_actual, f"estiba_pata_99.jpg", mapa_bytes[foto.name])
+                                errores.append(foto.name)
+                        
+                        # Actualizamos la barra
+                        progreso.progress((idx + 1) / total_fotos)
+                    
+                    texto_progreso.empty()
+                    progreso.empty()
+                    
+                    if errores:
+                        st.warning(f"⚠️ Se guardaron {patas_guardadas} fotos. Estas no se pudieron asignar y se guardaron como Pata 99: {', '.join(errores)}")
+                    else:
+                        st.success(f"✅ Se procesaron y guardaron {patas_guardadas} fotos correctamente.")
+                    
+                    st.session_state["reinicio_count"] += 1
+                    time.sleep(3)
+                    st.rerun()
 
         st.divider()
 
@@ -324,9 +346,8 @@ if pedido_actual:
             # 🔥 CONSTRUIMOS LA TABLA DESDE CERO USANDO LAS FOTOS REALES
             datos_tabla = []
             for f in estibas:
-                if f in st.session_state["fotos_ocultas"]:
-                    continue
-                pata_num = f.split("_")[2].replace(".jpg", "")
+                # Extraer el número de pata del nombre (ej: estiba_pata_15_A.jpg -> 15)
+                pata_num = f.split("_")[2].replace(".jpg", "").split("_")[0]
                 datos_tabla.append({
                     "Archivo": f,
                     "Pata OCR": int(pata_num) if pata_num.isdigit() else 0,
