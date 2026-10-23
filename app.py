@@ -10,7 +10,6 @@ import conexion_nube as nube
 
 import config
 from generador import generar_informe
-from ocr_bridge import analizar_fotos
 
 st.set_page_config(page_title="Generador de Informes", page_icon="📄", layout="wide")
 
@@ -56,14 +55,13 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
             
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔍 Ver", key=f"{key}_zoom_{i}_{RC}", use_container_width=True):
+                if st.button("🔍 Ver", key=f"{key}_zoom_{i}_{RC}", width="stretch"):
                     mostrar_zoom(f, bytes_img)
             with col2:
-                if st.button("🗑️ Borrar", key=f"{key}_del_{i}_{RC}", use_container_width=True):
-                    # 🔥 BORRAR Y FORZAR RECARGA
+                if st.button("🗑️ Borrar", key=f"{key}_del_{i}_{RC}", width="stretch"):
                     nube.borrar_foto_nube(pedido_id, f)
                     st.success("Foto eliminada.")
-                    time.sleep(1.5) # Esperamos a que Supabase procese el borrado
+                    time.sleep(1.5)
                     st.rerun()
             
             opciones = ["Mantener aquí", "Mover a Documentación", "Mover a Camión", "Mover a Termógrafo", "Mover a Sello", "Mover a Thermo-king"]
@@ -71,13 +69,13 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
             destino = st.selectbox("Mover foto a:", opciones_filtradas, key=f"derivar_{key}_{i}_{RC}", label_visibility="collapsed")
             
             if destino != "Mantener aquí":
-                if st.button("➡️ Confirmar", key=f"btn_mover_{key}_{i}_{RC}", use_container_width=True):
+                if st.button("➡️ Confirmar", key=f"btn_mover_{key}_{i}_{RC}", width="stretch"):
                     prefijo = {"Mover a Documentación": "documentacion_", "Mover a Camión": "camion_", "Mover a Termógrafo": "termografo_", "Mover a Sello": "sello_", "Mover a Thermo-king": "thermoking_"}[destino]
                     nuevo_nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
                     
                     bytes_foto = nube.descargar_foto_nube(pedido_id, f)
                     nube.subir_foto_nube(pedido_id, nuevo_nombre, bytes_foto)
-                    nube.borrar_foto_nube(pedido_id, f) # Borra la original
+                    nube.borrar_foto_nube(pedido_id, f)
                     
                     st.success(f"Foto movida a {destino}.")
                     time.sleep(1.5)
@@ -138,14 +136,14 @@ def mostrar_gestion_pedidos():
             with col_b: st.write(estado_mostrar)
             
             with col_c:
-                if st.button("👁️", key=f"ver_{p['id']}", use_container_width=True):
+                if st.button("👁️", key=f"ver_{p['id']}", width="stretch"):
                     st.session_state["cargar_ultimo"] = p
                     st.session_state["pedido_actual_id"] = p["id"]
                     st.session_state["forzar_modo_informe"] = True
                     st.rerun()
             
             with col_d:
-                if st.button("🗑️", key=f"del_{p['id']}", use_container_width=True):
+                if st.button("🗑️", key=f"del_{p['id']}", width="stretch"):
                     nube.borrar_pedido_nube(p['id'])
                     st.success("Pedido eliminado.")
                     time.sleep(1.5)
@@ -174,11 +172,10 @@ if pedido_actual:
             bloqueado = (p.get('estado') == 'Finalizado')
 
 with st.sidebar:
-    if st.button("🧹 Reiniciar app", use_container_width=True):
+    if st.button("🧹 Reiniciar app", width="stretch"):
         st.session_state.clear()
         st.rerun()
 
-# --- DATOS GENERALES ---
 st.subheader("📋 Datos generales")
 if bloqueado: st.warning("🔒 Pedido FINALIZADO.")
 
@@ -209,7 +206,7 @@ with st.form("datos"):
     nro_termografo = st.text_input("N° Termógrafo", value=val("nro_termografo", ""), disabled=bloqueado)
 
     if not bloqueado:
-        if st.form_submit_button("💾 Guardar datos", use_container_width=True):
+        if st.form_submit_button("💾 Guardar datos", width="stretch"):
             if pedido_actual:
                 pedidos = nube.obtener_pedidos_nube()
                 for p in pedidos:
@@ -219,12 +216,10 @@ with st.form("datos"):
                         st.success("Guardado.")
                         st.rerun()
 
-# --- FOTOS ---
 st.subheader("📷 Fotos")
 if pedido_actual:
     fotos = nube.obtener_fotos_nube(pedido_actual)
     
-    # 0. Documentación
     with st.expander("0. Documentación", expanded=False):
         docs = [x for x in fotos if x.startswith("documentacion_")]
         if docs:
@@ -241,21 +236,18 @@ if pedido_actual:
                     nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
                 st.rerun()
 
-    # 1. Estibas (CON OCR)
     with st.expander("1. Estibas", expanded=True):
         estibas = [x for x in fotos if x.startswith("estiba_pata_")]
         if estibas:
-            # Mostrar tabla resumen
             st.markdown("### 📋 Resumen de Patas")
             df_estibas = pd.DataFrame([{"Pata": f.split("_")[2].replace(".jpg", ""), "Archivo": f} for f in estibas])
-            st.dataframe(df_estibas, use_container_width=True)
+            st.dataframe(df_estibas, width="stretch")
             
-                       # Botón OCR
             if not bloqueado:
                 if st.button("🔍 Analizar con OCR", type="secondary", key=f"btn_ocr_{RC}"):
                     with st.spinner("Analizando fotos con OCR... ⏳"):
                         try:
-                            # Preparamos las fotos para el OCR
+                            from ocr_bridge import analizar_fotos
                             fotos_para_ocr = []
                             for f in estibas:
                                 b = nube.descargar_foto_nube(pedido_actual, f)
@@ -263,13 +255,11 @@ if pedido_actual:
                             
                             resultados = analizar_fotos(fotos_para_ocr)
                             
-                            # 🔥 DIAGNÓSTICO: Mostramos el texto crudo para ver qué leyó realmente
                             if resultados:
                                 with st.expander("👁️ Ver texto detectado por el OCR (Diagnóstico)"):
                                     for r in resultados:
                                         st.write(f"**{r['archivo']}**: {r.get('texto_crudo', 'Nada')}")
                             
-                            # Mostramos los resultados en un editor
                             data = []
                             for r in resultados:
                                 data.append({
@@ -283,17 +273,15 @@ if pedido_actual:
                         except Exception as e:
                             st.error(f"Error en OCR: {e}")
                 
-            # Mostrar editor de resultados si existen
             if f"ocr_result_{pedido_actual}" in st.session_state:
                 st.markdown("### ✏️ Revisión Pata / Caja")
                 df_editado = st.data_editor(
                     st.session_state[f"ocr_result_{pedido_actual}"],
-                    use_container_width=True,
+                    width="stretch",
                     disabled=bloqueado
                 )
                 st.session_state[f"ocr_result_{pedido_actual}"] = df_editado
                 
-                # Mostrar vista previa al lado de la tabla
                 col_tabla, col_preview = st.columns([2, 1])
                 with col_tabla:
                     st.info("Edita las cajas si es necesario. El OCR ha detectado las patas.")
@@ -304,14 +292,13 @@ if pedido_actual:
                         b64 = convertir_a_base64(b, 600)
                         st.markdown(f'<img src="{b64}" style="width:100%">', unsafe_allow_html=True)
 
-        # Subida manual masiva de estibas
         if not bloqueado:
             st.markdown("---")
             st.markdown("### 📤 Subida Manual de Estibas (El OCR asignará las patas)")
             fotos_manuales = st.file_uploader("Sube todas las fotos aquí", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
             
             if fotos_manuales:
-                if st.button("🚀 Procesar con OCR y Guardar", type="primary", use_container_width=True):
+                if st.button("🚀 Procesar con OCR y Guardar", type="primary", width="stretch"):
                     with st.spinner("El OCR está leyendo los carteles... ⏳"):
                         try:
                             from ocr_bridge import analizar_fotos
@@ -331,7 +318,6 @@ if pedido_actual:
                                     nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
                                     patas_guardadas += 1
                                 else:
-                                    # 🔥 SI NO DETECTA LA PATA, LA GUARDAMOS CON UN NOMBRE GENÉRICO PARA NO PERDERLA
                                     nuevo_nombre = f"estiba_pata_99.jpg"
                                     nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[nombre_original])
                                     errores.append(nombre_original)
@@ -345,7 +331,7 @@ if pedido_actual:
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Error al procesar: {e}")
-    # 2, 3, 4, 5
+
     def seccion_extra(titulo, prefijo):
         with st.expander(titulo, expanded=False):
             items = [x for x in fotos if x.startswith(prefijo)]
@@ -371,11 +357,11 @@ if pedido_actual:
 st.divider()
 c1, c2 = st.columns(2)
 with c1:
-    if st.button("🚀 Generar PDF", type="primary", use_container_width=True):
+    if st.button("🚀 Generar PDF", type="primary", width="stretch"):
         st.success("Función PDF en construcción para la nube.")
 with c2:
     if pedido_actual and not bloqueado:
-        if st.button("✅ Finalizar Pedido", use_container_width=True):
+        if st.button("✅ Finalizar Pedido", width="stretch"):
             pedidos = nube.obtener_pedidos_nube()
             for p in pedidos:
                 if p['id'] == pedido_actual:
@@ -383,7 +369,7 @@ with c2:
                     nube.subir_pedido_nube(pedido_actual, p)
                     st.rerun()
     elif pedido_actual and bloqueado:
-        if st.button("🔓 Reabrir Pedido", type="primary", use_container_width=True):
+        if st.button("🔓 Reabrir Pedido", type="primary", width="stretch"):
             pedidos = nube.obtener_pedidos_nube()
             for p in pedidos:
                 if p['id'] == pedido_actual:
