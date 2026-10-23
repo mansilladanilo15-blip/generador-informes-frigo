@@ -41,7 +41,7 @@ def mostrar_zoom(nombre_foto, bytes_foto):
     if b64:
         st.markdown(f'<div style="text-align:center;"><img src="{b64}" style="max-width:100%; max-height:70vh; border:1px solid #ddd; border-radius:8px;"></div>', unsafe_allow_html=True)
         st.caption(f"📸 {nombre_foto}")
-    if st.button("❌ Cerrar", use_container_width=True, key="close_modal"):
+    if st.button("❌ Cerrar", width="stretch", key="close_modal"):
         st.rerun()
 
 def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
