@@ -15,25 +15,38 @@ def obtener_cliente():
 # ==========================================
 # FUNCIONES PARA PEDIDOS (BASE DE DATOS)
 # ==========================================
-def subir_pedido_nube(pedido_id, datos_dict):
-    datos_json = json.dumps(datos_dict, ensure_ascii=False)
-    url = f"{SUPABASE_URL}/rest/v1/pedidos"
+import time # Asegúrate de tener esto importado arriba
+
+def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
+    supabase = obtener_cliente()
+    ruta_nube = f"{pedido_id}/{nombre_archivo}"
     
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal"
-    }
+    # 1. Intentamos borrar la foto si ya existe
+    try:
+        supabase.storage.from_("fotos").remove([ruta_nube])
+        time.sleep(1) # 🔥 ESPERAMOS 1 SEGUNDO PARA QUE SUPABASE PROCESE EL BORRADO
+    except Exception:
+        pass 
     
-    payload = {"id": pedido_id, "datos_json": datos_json}
-    respuesta = requests.post(url, headers=headers, json=payload)
+    # 2. Creamos un archivo temporal real en el servidor
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        tmp.write(bytes(contenido_bytes))
+        ruta_temporal = tmp.name
     
-    if respuesta.status_code == 409:
-        url_update = f"{url}?id=eq.{pedido_id}"
-        requests.patch(url_update, headers=headers, json=payload)
-    elif respuesta.status_code >= 400:
-        raise Exception(f"Error {respuesta.status_code}: {respuesta.text}")
+    try:
+        # 3. Lo subimos SIN upsert
+        with open(ruta_temporal, "rb") as f:
+            supabase.storage.from_("fotos").upload(
+                path=ruta_nube,
+                file=f,
+                file_options={"content-type": "image/jpeg"}
+            )
+    finally:
+        # 4. Borramos el archivo temporal
+        if os.path.exists(ruta_temporal):
+            os.remove(ruta_temporal)
+        
+    return supabase.storage.from_("fotos").get_public_url(ruta_nube)
 
 def obtener_pedidos_nube():
     supabase = obtener_cliente()
