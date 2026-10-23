@@ -111,6 +111,22 @@ def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
     if key_multiselect in st.session_state:
         del st.session_state[key_multiselect]
     return len(nombres_a_borrar)
+def borrar_todas_las_estibas(pedido_id, fotos_estibas):
+    """Elimina todas las fotos de estibas (incluyendo duplicados) de la nube."""
+    for f in fotos_estibas:
+        nube.borrar_foto_nube(pedido_id, f)
+        st.session_state["fotos_ocultas"].add(f)
+        if f in st.session_state["cajas_temporales"]:
+            del st.session_state["cajas_temporales"][f]
+    
+    st.cache_data.clear()
+    
+    # Limpiamos las selecciones de la memoria
+    for key in list(st.session_state.keys()):
+        if key.startswith("sel_borrar_estibas_") or key.startswith("editor_estibas_"):
+            del st.session_state[key]
+            
+    return len(fotos_estibas)
 
 def mostrar_gestion_pedidos():
     st.subheader("📋 Gestión de Pedidos")
@@ -268,6 +284,18 @@ if pedido_actual:
         estibas = [x for x in fotos if x.startswith("estiba_pata_") and x not in st.session_state["fotos_ocultas"]]
         
         if not bloqueado:
+                    if not bloqueado:
+            # 🔥 BOTÓN DE EMERGENCIA PARA LIMPIAR TODO
+            if estibas:
+                with st.expander("🧨 Zona de Peligro (Limpiar todas las estibas)"):
+                    st.warning("Esto eliminará TODAS las fotos de estibas de este pedido en la nube. Úsalo solo si necesitas empezar de cero.")
+                    if st.button("🗑️ Borrar TODAS las fotos de estibas", type="primary", width="stretch"):
+                        with st.spinner("Eliminando todas las fotos..."):
+                            cant = borrar_todas_las_estibas(pedido_actual, estibas)
+                            st.success(f"✅ Se eliminaron {cant} fotos de la nube.")
+                            st.session_state["reinicio_count"] += 1
+                            time.sleep(1.5)
+                            st.rerun()
             st.markdown("### 📤 Subir y Procesar Fotos Nuevas")
             st.info("Sube las fotos de WhatsApp. El OCR les asignará el número de Pata y contará las cajas.")
             fotos_manuales = st.file_uploader("Selecciona las fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
