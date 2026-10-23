@@ -18,7 +18,7 @@ if "reinicio_count" not in st.session_state:
 if "fotos_ocultas" not in st.session_state:
     st.session_state["fotos_ocultas"] = set()
 if "cajas_temporales" not in st.session_state:
-    st.session_state["cajas_temporales"] = {} # 🔥 Memoria para guardar las cajas detectadas
+    st.session_state["cajas_temporales"] = {}
 
 RC = st.session_state["reinicio_count"]
 
@@ -100,25 +100,18 @@ def val(key, default=""):
 def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
     if not seleccion:
         return 0
-    
     nombres_a_borrar = [df.iloc[idx]["Archivo"] for idx in seleccion]
-    
     for f in nombres_a_borrar:
         nube.borrar_foto_nube(pedido_id, f)
         st.session_state["fotos_ocultas"].add(f)
-        # 🔥 Borramos también sus cajas de la memoria
         if f in st.session_state["cajas_temporales"]:
             del st.session_state["cajas_temporales"][f]
-        
     st.cache_data.clear()
-    
     key_multiselect = f"sel_borrar_estibas_{pedido_id}"
     if key_multiselect in st.session_state:
         del st.session_state[key_multiselect]
-        
     return len(nombres_a_borrar)
 
-# ============ GESTIÓN DE PEDIDOS ============
 def mostrar_gestion_pedidos():
     st.subheader("📋 Gestión de Pedidos")
     tipo_pedido = st.radio("Selecciona el tipo:", ["Pedido de venta", "Traslado"], horizontal=True)
@@ -155,7 +148,6 @@ def mostrar_gestion_pedidos():
             st.success("✅ Pedido creado.")
             st.rerun()
 
-# ============ ENRUTADOR ============
 if st.session_state.get("forzar_modo_informe", False):
     st.session_state["selector_modo"] = "📄 Generar Informe"
     st.session_state["forzar_modo_informe"] = False
@@ -168,7 +160,6 @@ if modo == "📋 Gestión de Pedidos":
     mostrar_gestion_pedidos()
     st.stop()
 
-# ============ MODO INFORME ============
 pedido_actual = st.session_state.get("pedido_actual_id", "")
 bloqueado = False
 pedidos_nube = nube.obtener_pedidos_nube()
@@ -179,7 +170,6 @@ if pedido_actual:
             bloqueado = (p.get('estado') == 'Finalizado')
             st.session_state["cargar_ultimo"] = p
 
-# ============ BARRA LATERAL ============
 with st.sidebar:
     st.markdown("### 🧭 Navegación Rápida")
     if not pedidos_nube:
@@ -198,7 +188,7 @@ with st.sidebar:
                     st.session_state["pedido_actual_id"] = p["id"]
                     st.session_state["reinicio_count"] += 1
                     st.session_state["fotos_ocultas"] = set()
-                    st.session_state["cajas_temporales"] = {} # Limpiamos cajas al cambiar pedido
+                    st.session_state["cajas_temporales"] = {}
                     st.rerun()
 
         if pendientes:
@@ -274,7 +264,6 @@ if pedido_actual:
                     nube.subir_foto_nube(pedido_actual, nombre, f.getbuffer())
                 st.rerun()
 
-    # 🔥 ESTE ES EL BLOQUE DE ESTIBAS QUE DEBES REEMPLAZAR
     with st.expander("1. Estibas", expanded=True):
         estibas = [x for x in fotos if x.startswith("estiba_pata_") and x not in st.session_state["fotos_ocultas"]]
         
@@ -305,18 +294,11 @@ if pedido_actual:
                             cajas_detectadas = r.get("total_cajas", 0)
                             
                             if pata_detectada and pata_detectada != 99:
-                                nombre_base = f"estiba_pata_{pata_detectada}"
-                                versiones = [x for x in estibas if x.startswith(nombre_base)]
-                                
-                                if not versiones:
-                                    nuevo_nombre = f"{nombre_base}.jpg"
-                                else:
-                                    letra = chr(65 + len(versiones))
-                                    nuevo_nombre = f"{nombre_base}_{letra}.jpg"
+                                # 🔥 FORZAMOS EL MISMO NOMBRE PARA SOBRESCRIBIR LA FOTO
+                                nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
                                 
                                 nube.subir_foto_nube(pedido_actual, nuevo_nombre, mapa_bytes[foto.name])
                                 
-                                # 🔥 GUARDAMOS LAS CAJAS EN MEMORIA
                                 st.session_state["cajas_temporales"][nuevo_nombre] = cajas_detectadas
                                 patas_guardadas += 1
                             else:
@@ -344,9 +326,9 @@ if pedido_actual:
             
             datos_tabla = []
             for f in estibas:
-                pata_num = f.split("_")[2].replace(".jpg", "").split("_")[0]
+                # Extrae el número quitando el .jpg
+                pata_num = f.split("_")[2].replace(".jpg", "")
                 
-                # 🔥 LEER LAS CAJAS DESDE LA MEMORIA
                 cajas_guardadas = st.session_state["cajas_temporales"].get(f, 0)
                 
                 datos_tabla.append({
