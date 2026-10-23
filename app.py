@@ -286,7 +286,7 @@ if pedido_actual:
         if not bloqueado:
                     if not bloqueado:
             # 🔥 BOTÓN DE EMERGENCIA PARA LIMPIAR TODO
-            if estibas:
+        if estibas:
                 with st.expander("🧨 Zona de Peligro (Limpiar todas las estibas)"):
                     st.warning("Esto eliminará TODAS las fotos de estibas de este pedido en la nube. Úsalo solo si necesitas empezar de cero.")
                     if st.button("🗑️ Borrar TODAS las fotos de estibas", type="primary", width="stretch"):
