@@ -43,6 +43,38 @@ def mostrar_zoom(nombre_foto, bytes_foto):
     if st.button("❌ Cerrar", use_container_width=True, key="close_modal"):
         st.rerun()
 
+def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
+    if not fotos: return
+    cols = st.columns(cols_num)
+    for i, f in enumerate(fotos):
+        with cols[i % cols_num]:
+            bytes_img = nube.descargar_foto_nube(pedido_id, f)
+            b64 = convertir_a_base64(bytes_img, max_ancho=400)
+            if b64:
+                st.markdown(f'<img src="{b64}" style="width:100%; border:1px solid #ddd; border-radius:6px; margin-bottom:6px;">', unsafe_allow_html=True)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔍 Ver", key=f"{key}_zoom_{i}_{RC}", use_container_width=True):
+                    mostrar_zoom(f, bytes_img)
+            with col2:
+                if st.button("🗑️", key=f"{key}_del_{i}_{RC}", use_container_width=True):
+                    nube.borrar_foto_nube(pedido_id, f)
+                    st.rerun()
+            
+            # Selector de derivación
+            opciones = ["Mantener", "Mover a Camión", "Mover a Termógrafo", "Mover a Sello", "Mover a Thermo-king"]
+            destino = st.selectbox("Mover:", opciones, key=f"derivar_{key}_{i}_{RC}", label_visibility="collapsed")
+            if destino != "Mantener":
+                if st.button("➡️ Confirmar", key=f"btn_mover_{key}_{i}_{RC}", use_container_width=True):
+                    prefijo = {"Mover a Camión": "camion_", "Mover a Termógrafo": "termografo_", "Mover a Sello": "sello_", "Mover a Thermo-king": "thermoking_"}[destino]
+                    nuevo_nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
+                    # Descargar, subir con nuevo nombre y borrar el viejo
+                    bytes_foto = nube.descargar_foto_nube(pedido_id, f)
+                    nube.subir_foto_nube(pedido_id, nuevo_nombre, bytes_foto)
+                    nube.borrar_foto_nube(pedido_id, f)
+                    st.rerun()
+
 def val(key, default=""):
     ultimo_cargado = st.session_state.get("cargar_ultimo", {})
     v = ultimo_cargado.get(key, default)
@@ -73,14 +105,13 @@ def mostrar_gestion_pedidos():
         crear = st.form_submit_button("➕ Crear Pedido", type="primary")
         
         if crear and nuevo_nro:
-            # 🔥 Generamos un UUID real para la base de datos
             pedido_id = str(uuid.uuid4())
-            # 🔥 Guardamos tu código personalizado dentro de los datos
             codigo_pedido = f"{nuevo_nro}_{uuid.uuid4().hex[:4]}"
+            
             if tipo_pedido == "Traslado":
-                datos = {"id": pedido_id, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro, "cliente": nuevo_destino, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
+                datos = {"id": pedido_id, "codigo_pedido": codigo_pedido, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro, "cliente": nuevo_destino, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
             else:
-                datos = {"id": pedido_id, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro_entrega or "-", "cliente": nuevo_cliente, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
+                datos = {"id": pedido_id, "codigo_pedido": codigo_pedido, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro_entrega or "-", "cliente": nuevo_cliente, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
             
             nube.subir_pedido_nube(pedido_id, datos)
             st.success("✅ Pedido creado.")
@@ -107,10 +138,7 @@ def mostrar_gestion_pedidos():
             
             with col_d:
                 if st.button("🗑️", key=f"del_{p['id']}", use_container_width=True):
-                    # Borrar fotos de supabase y el pedido
-                    for f in nube.obtener_fotos_nube(p['id']):
-                        nube.borrar_foto_nube(p['id'], f)
-                    nube.obtener_cliente().table("pedidos").delete().eq("id", p['id']).execute()
+                    nube.borrar_pedido_nube(p['id'])
                     st.success("Pedido eliminado.")
                     st.rerun()
 
@@ -188,27 +216,29 @@ if pedido_actual:
     fotos = nube.obtener_fotos_nube(pedido_actual)
     
     with st.expander("0. Documentación", expanded=False):
-        for f in [x for x in fotos if x.startswith("documentacion_")]:
-            st.write(f)
+        docs = [x for x in fotos if x.startswith("documentacion_")]
+        if docs:
+            renderizar_galeria("doc", docs, pedido_actual, cols_num=4)
+        else:
+            st.info("No hay documentación.")
             
     with st.expander("1. Estibas", expanded=True):
         estibas = [x for x in fotos if x.startswith("estiba_pata_")]
-        cols = st.columns(4)
-        for idx, f in enumerate(estibas):
-            with cols[idx % 4]:
-                b = nube.descargar_foto_nube(pedido_actual, f)
-                b64 = convertir_a_base64(b, 400)
-                st.markdown(f'<img src="{b64}" style="width:100%">', unsafe_allow_html=True)
-                
-    for cat, pre in [("2. Camión", "camion_"), ("3. Termógrafo", "termografo_"), ("4. Sellos", "sello_"), ("5. Thermo-king", "thermoking_")]:
-        with st.expander(cat, expanded=False):
-            items = [x for x in fotos if x.startswith(pre)]
+        if estibas:
             cols = st.columns(4)
-            for idx, f in enumerate(items):
+            for idx, f in enumerate(estibas):
                 with cols[idx % 4]:
                     b = nube.descargar_foto_nube(pedido_actual, f)
                     b64 = convertir_a_base64(b, 400)
                     st.markdown(f'<img src="{b64}" style="width:100%">', unsafe_allow_html=True)
+                    
+    for cat, pre in [("2. Camión", "camion_"), ("3. Termógrafo", "termografo_"), ("4. Sellos", "sello_"), ("5. Thermo-king", "thermoking_")]:
+        with st.expander(cat, expanded=False):
+            items = [x for x in fotos if x.startswith(pre)]
+            if items:
+                renderizar_galeria(pre, items, pedido_actual, cols_num=4)
+            else:
+                st.info("No hay fotos.")
 
 st.divider()
 c1, c2 = st.columns(2)
