@@ -21,28 +21,24 @@ def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
     
-    # 1. Intentamos borrar la foto si ya existe
-    try:
-        supabase.storage.from_("fotos").remove([ruta_nube])
-        time.sleep(1) # 🔥 ESPERAMOS 1 SEGUNDO PARA QUE SUPABASE PROCESE EL BORRADO
-    except Exception:
-        pass 
-    
-    # 2. Creamos un archivo temporal real en el servidor
+    # Creamos un archivo temporal real en el servidor
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         tmp.write(bytes(contenido_bytes))
         ruta_temporal = tmp.name
     
     try:
-        # 3. Lo subimos SIN upsert
+        # 🔥 USAMOS UPSERT PARA SOBRESCRIBIR SI YA EXISTE
         with open(ruta_temporal, "rb") as f:
             supabase.storage.from_("fotos").upload(
                 path=ruta_nube,
                 file=f,
-                file_options={"content-type": "image/jpeg"}
+                file_options={
+                    "content-type": "image/jpeg",
+                    "upsert": "true"  # <-- ESTO PERMITE SOBRESCRIBIR
+                }
             )
     finally:
-        # 4. Borramos el archivo temporal
+        # Borramos el archivo temporal
         if os.path.exists(ruta_temporal):
             os.remove(ruta_temporal)
         
