@@ -96,14 +96,27 @@ def val(key, default=""):
     return default if v == "-" or v is None else v
 
 def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
-    """Borra de la nube las fotos seleccionadas en la tabla y actualiza la sesión."""
     if not seleccion:
         return 0
+    
     nombres_a_borrar = [df.iloc[idx]["Archivo"] for idx in seleccion]
+    
     for f in nombres_a_borrar:
         nube.borrar_foto_nube(pedido_id, f)
         st.session_state["fotos_ocultas"].add(f)
+        
     st.cache_data.clear()
+    
+    # 🔥 LIMPIEZA PROFUNDA DE MEMORIA:
+    # 1. Borramos la tabla de la memoria para obligar a que se reconstruya limpia
+    if f"ocr_result_{pedido_id}" in st.session_state:
+        del st.session_state[f"ocr_result_{pedido_id}"]
+        
+    # 2. Borramos la selección del multiselect
+    key_multiselect = f"sel_borrar_estibas_{pedido_id}"
+    if key_multiselect in st.session_state:
+        del st.session_state[key_multiselect]
+        
     return len(nombres_a_borrar)
 
 # ============ GESTIÓN DE PEDIDOS ============
