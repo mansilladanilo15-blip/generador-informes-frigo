@@ -1,3 +1,4 @@
+from ocr_bridge import analizar_fotos
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime
@@ -254,7 +255,6 @@ if pedido_actual:
                 if st.button("🔍 Analizar con OCR", type="secondary", key=f"btn_ocr_{RC}"):
                     with st.spinner("Analizando fotos con OCR... ⏳"):
                         try:
-                            from ocr_bridge import analizar_fotos
                             # Preparamos las fotos para el OCR
                             fotos_para_ocr = []
                             for f in estibas:
