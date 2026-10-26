@@ -14,8 +14,6 @@ if "procesados" not in st.session_state:
     st.session_state["procesados"] = {}
 if "subida_terminada" not in st.session_state:
     st.session_state["subida_terminada"] = False
-if "token_fotos" not in st.session_state:
-    st.session_state["token_fotos"] = str(uuid.uuid4())[:6]
 
 if st.session_state["auto_refresh"]:
     st.markdown("""<script>setTimeout(function(){window.location.reload();}, 30000);</script>""", unsafe_allow_html=True)
@@ -25,10 +23,11 @@ with col_titulo:
     st.title("📱 App de Operarios")
 with col_boton:
     if st.button("🔄 Recargar", width="stretch"):
+        # 🔥 TRUCO MAESTRO: Forzamos la recarga total de la página
         st.session_state["subida_terminada"] = False
-        st.session_state["token_fotos"] = str(uuid.uuid4())[:6]
+        st.session_state["fotos_ocultas_movil"] = set()
         st.cache_data.clear()
-        st.rerun()
+        st.markdown("<script>window.location.reload();</script>", unsafe_allow_html=True)
 
 todos_los_pedidos = nube.obtener_pedidos_nube()
 
@@ -85,8 +84,10 @@ if pedido:
 
     # 0. DOCUMENTACIÓN
     fotos_doc_brutas = nube.obtener_fotos_nube(pedido_id)
+    # Si la PC borró todo, la nube estará vacía y limpiamos la memoria
     if not fotos_doc_brutas:
         st.session_state["fotos_ocultas_movil"] = set()
+        
     fotos_doc = [f for f in fotos_doc_brutas if f.startswith("documentacion_") and f not in st.session_state["fotos_ocultas_movil"]]
     
     with st.expander(f"📄 0. Documentación ({len(fotos_doc)})", expanded=True):
@@ -125,17 +126,15 @@ if pedido:
                 with cols[idx % 2]:
                     bytes_img = nube.descargar_foto_nube(pedido_id, f)
                     b64 = base64.b64encode(bytes_img).decode("utf-8")
-                    token = st.session_state["token_fotos"]
                     st.markdown(f'''
                         <div style="text-align:center; margin-bottom: 5px;">
-                            <img src="data:image/jpeg;base64,{b64}?t={token}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                            <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
                         </div>
                     ''', unsafe_allow_html=True)
                     
-                    if st.button("🗑️ Borrar", key=f"del_doc_{f}_{token}", width="stretch"):
+                    if st.button("🗑️ Borrar", key=f"del_doc_{f}", width="stretch"):
                         nube.borrar_foto_nube(pedido_id, f)
                         st.session_state["fotos_ocultas_movil"].add(f)
-                        st.session_state["token_fotos"] = str(uuid.uuid4())[:6]
                         st.rerun()
 
     st.divider()
@@ -196,18 +195,16 @@ if pedido:
                     pata_asignada = patas_nube.get(f, f.split("_")[2].replace(".jpg", "").split("_")[0])
                     cajas = cajas_nube.get(f, 0)
                     
-                    token = st.session_state["token_fotos"]
                     st.markdown(f'''
                         <div style="text-align:center; margin-bottom: 5px;">
-                            <img src="data:image/jpeg;base64,{b64}?t={token}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                            <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
                             <div style="font-size:12px; color:#1a4d8f; font-weight:bold; margin-top:2px;">📦 Pata {pata_asignada} ({cajas} cajas)</div>
                         </div>
                     ''', unsafe_allow_html=True)
                     
-                    if st.button("🗑️ Borrar", key=f"del_estiba_{f}_{token}", width="stretch"):
+                    if st.button("🗑️ Borrar", key=f"del_estiba_{f}", width="stretch"):
                         nube.borrar_foto_nube(pedido_id, f)
                         st.session_state["fotos_ocultas_movil"].add(f)
-                        st.session_state["token_fotos"] = str(uuid.uuid4())[:6]
                         st.rerun()
         else:
             st.info("No hay fotos de estibas subidas.")
@@ -231,17 +228,15 @@ if pedido:
                         bytes_img = nube.descargar_foto_nube(pedido_id, f)
                         b64 = base64.b64encode(bytes_img).decode("utf-8")
                         
-                        token = st.session_state["token_fotos"]
                         st.markdown(f'''
                             <div style="text-align:center; margin-bottom: 5px;">
-                                <img src="data:image/jpeg;base64,{b64}?t={token}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                                <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
                             </div>
                         ''', unsafe_allow_html=True)
                         
-                        if st.button("🗑️ Borrar", key=f"del_{f}_{token}", width="stretch"):
+                        if st.button("🗑️ Borrar", key=f"del_{f}", width="stretch"):
                             nube.borrar_foto_nube(pedido_id, f)
                             st.session_state["fotos_ocultas_movil"].add(f)
-                            st.session_state["token_fotos"] = str(uuid.uuid4())[:6]
                             st.rerun()
             
             tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
