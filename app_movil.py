@@ -23,13 +23,6 @@ with col_boton:
     if st.button("🔄 Recargar", width="stretch"):
         st.rerun()
 
-with st.sidebar:
-    st.subheader("⚙️ Opciones")
-    auto_recarga = st.toggle("Auto-recargar (cada 30s)", value=st.session_state["auto_refresh"])
-    if auto_recarga != st.session_state["auto_refresh"]:
-        st.session_state["auto_refresh"] = auto_recarga
-        st.rerun()
-
 todos_los_pedidos = nube.obtener_pedidos_nube()
 
 if not todos_los_pedidos:
@@ -79,6 +72,11 @@ if pedido:
 
     pedido_id = pedido['id']
 
+    # 🔥 LEEMOS LOS DATOS DEL PEDIDO DESDE SUPABASE (Para sincronizar patas y cajas)
+    pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
+    cajas_nube = pedido_data.get("cajas_estibas", {})
+    patas_nube = pedido_data.get("patas_estibas", {})
+
     # 0. DOCUMENTACIÓN
     fotos_doc = nube.obtener_fotos_nube(pedido_id)
     fotos_doc = [f for f in fotos_doc if f.startswith("documentacion_") and f not in st.session_state["fotos_ocultas_movil"]]
@@ -102,7 +100,6 @@ if pedido:
                 st.rerun()
                 
         if fotos_doc:
-            # 🔥 GRILLA SIMÉTRICA CON BOTÓN GRANDE
             cols = st.columns(2)
             for idx, f in enumerate(fotos_doc):
                 with cols[idx % 2]:
@@ -125,13 +122,40 @@ if pedido:
     fotos_estibas = nube.obtener_fotos_nube(pedido_id)
     fotos_estibas = [f for f in fotos_estibas if f.startswith("estiba_pata_") and f not in st.session_state["fotos_ocultas_movil"]]
     
-    pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
-    cajas_nube = pedido_data.get("cajas_estibas", {})
-    
     if "expand_estibas" not in st.session_state:
         st.session_state["expand_estibas"] = True
 
     with st.expander(f"📦 1. Estibas ({len(fotos_estibas)})", expanded=st.session_state["expand_estibas"]):
+        
+        # 🔥 SUBIDA MÚLTIPLE PARA ESTIBAS
+        st.info("Sube todas las fotos de una vez. El administrador en la PC se encargará de asignar las patas.")
+        tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
+        
+        with tab1:
+            subidas = st.file_uploader("Selecciona varias fotos", type=["jpg", "png"], accept_multiple_files=True, key="gal_estibas_multi")
+            if subidas:
+                # Procesar en lote
+                for foto in subidas:
+                    file_id = f"{pedido_id}_estiba_{foto.name}_{foto.size}"
+                    if file_id not in st.session_state["procesados"]:
+                        # Se guardan con el nombre por defecto para que el admin las asigne en la PC
+                        nombre = f"estiba_pata_99_REVISAR_{uuid.uuid4().hex[:4]}.jpg"
+                        nube.subir_foto_nube(pedido_id, nombre, foto.getbuffer())
+                        st.session_state["procesados"][file_id] = True
+                st.toast("✅ Fotos subidas. Ve a la PC para asignar las patas.")
+                st.rerun()
+                
+        with tab2:
+            cam = st.camera_input("Tomar foto", key="cam_estiba")
+            if cam:
+                nombre = f"estiba_pata_99_REVISAR_{uuid.uuid4().hex[:4]}.jpg"
+                nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
+                st.toast("✅ Foto subida.")
+                st.rerun()
+
+        st.divider()
+
+        # GALERÍA
         if fotos_estibas:
             cols = st.columns(2)
             for idx, f in enumerate(fotos_estibas):
@@ -139,7 +163,8 @@ if pedido:
                     bytes_img = nube.descargar_foto_nube(pedido_id, f)
                     b64 = base64.b64encode(bytes_img).decode("utf-8")
                     
-                    pata_asignada = f.split("_")[2].replace(".jpg", "").split("_")[0]
+                    # 🔥 LEER LA PATA Y CAJAS DESDE EL JSON DE SUPABASE (No del nombre del archivo)
+                    pata_asignada = patas_nube.get(f, f.split("_")[2].replace(".jpg", "").split("_")[0])
                     cajas = cajas_nube.get(f, 0)
                     
                     st.markdown(f'''
@@ -155,20 +180,6 @@ if pedido:
                         st.rerun()
         else:
             st.info("No hay fotos de estibas subidas.")
-
-        tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
-        with tab1:
-            subida = st.file_uploader("Subir nueva estiba", type=["jpg", "png"], key="gal_estiba")
-            if subida:
-                nombre = f"estiba_pata_99_REVISAR.jpg"
-                nube.subir_foto_nube(pedido_id, nombre, subida.getbuffer())
-                st.rerun()
-        with tab2:
-            cam = st.camera_input("Tomar foto", key="cam_estiba")
-            if cam:
-                nombre = f"estiba_pata_99_REVISAR.jpg"
-                nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
-                st.rerun()
 
     st.divider()
 
