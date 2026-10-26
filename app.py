@@ -373,9 +373,7 @@ if pedido_actual:
                     if "patas_estibas" not in pedido_data: pedido_data["patas_estibas"] = {}
                     
                     for idx, foto in enumerate(fotos_manuales):
-                        # 🔥 ACTUALIZAR BARRA ANTES DE PROCESAR
                         texto_progreso.info(f"⏳ Analizando foto {idx + 1} de {total_fotos}: {foto.name}")
-                        
                         resultados = analizar_fotos([(foto.name, foto.getvalue())])
                         
                         for r in resultados:
@@ -399,20 +397,19 @@ if pedido_actual:
                                 pedido_data["patas_estibas"][nuevo_nombre] = 99
                                 errores.append(foto.name)
                         
-                        # 🔥 ACTUALIZAR BARRA DESPUÉS DE PROCESAR
                         progreso.progress((idx + 1) / total_fotos)
                     
+                    # 🔥 GUARDAMOS EN SUPABASE
                     nube.subir_pedido_nube(pedido_actual, pedido_data)
+                    
                     texto_progreso.empty()
                     progreso.empty()
+                    st.success(f"✅ Se procesaron y guardaron {patas_guardadas} fotos correctamente. Sincronizando con la nube...")
                     
-                    if errores:
-                        st.warning(f"⚠️ Se procesaron {patas_guardadas} fotos. Fotos sin pata: {', '.join(errores)}")
-                    else:
-                        st.success(f"✅ Se procesaron y guardaron {patas_guardadas} fotos correctamente.")
-                    
+                    # 🔥 LE DAMOS 3 SEGUNDOS A SUPABASE PARA CONFIRMAR LAS FOTOS Y EL JSON
+                    time.sleep(3)
+                    st.cache_data.clear()
                     st.session_state["reinicio_count"] += 1
-                    time.sleep(2)
                     st.rerun()
         st.divider()
 
