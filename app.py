@@ -315,6 +315,8 @@ if pedido_actual:
 
             st.markdown("### 📤 Subir y Procesar Fotos Nuevas")
             st.info("Sube las fotos de WhatsApp. El OCR les asignará el número de Pata y contará las cajas.")
+            
+            # 🔥 El key dinámico con RC evita micro-refrescos al limpiar el cargador
             fotos_manuales = st.file_uploader("Selecciona las fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
             
             if fotos_manuales:
@@ -328,10 +330,11 @@ if pedido_actual:
                     errores = []
                     omitidas = 0
                     
-                    # 🔥 Cargamos los datos actuales del pedido para actualizarlos
                     pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_actual), {})
                     if "cajas_estibas" not in pedido_data:
                         pedido_data["cajas_estibas"] = {}
+                    if "patas_estibas" not in pedido_data:
+                        pedido_data["patas_estibas"] = {}
                     
                     for idx, foto in enumerate(fotos_manuales):
                         texto_progreso.info(f"⏳ Procesando foto {idx + 1} de {total_fotos}: {foto.name}")
@@ -349,16 +352,17 @@ if pedido_actual:
                                 
                                 nube.subir_foto_nube(pedido_actual, nuevo_nombre, foto.getvalue())
                                 pedido_data["cajas_estibas"][nuevo_nombre] = cajas_detectadas
+                                pedido_data["patas_estibas"][nuevo_nombre] = pata_detectada
                                 patas_guardadas += 1
                             else:
                                 nuevo_nombre = f"estiba_pata_99_REVISAR.jpg"
                                 nube.subir_foto_nube(pedido_actual, nuevo_nombre, foto.getvalue())
                                 pedido_data["cajas_estibas"][nuevo_nombre] = cajas_detectadas
+                                pedido_data["patas_estibas"][nuevo_nombre] = 99
                                 errores.append(foto.name)
                         
                         progreso.progress((idx + 1) / total_fotos)
                     
-                    # Guardamos las cajas en la nube
                     nube.subir_pedido_nube(pedido_actual, pedido_data)
                     texto_progreso.empty()
                     progreso.empty()
@@ -369,7 +373,7 @@ if pedido_actual:
                         st.success(f"✅ Se procesaron y guardaron {patas_guardadas} fotos correctamente.")
                     
                     st.session_state["reinicio_count"] += 1
-                    time.sleep(3)
+                    time.sleep(2)
                     st.rerun()
 
         st.divider()
@@ -377,18 +381,19 @@ if pedido_actual:
         if estibas:
             st.markdown("### 📋 Resumen de Patas y Cajas")
             
-            # 🔥 Leemos los datos desde el JSON de Supabase
             pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_actual), {})
             cajas_nube = pedido_data.get("cajas_estibas", {})
+            patas_nube = pedido_data.get("patas_estibas", {})
 
             datos_tabla = []
             for f in estibas:
-                pata_num = f.split("_")[2].replace(".jpg", "").split("_")[0]
+                pata_original = f.split("_")[2].replace(".jpg", "").split("_")[0]
+                pata_guardada = patas_nube.get(f, int(pata_original) if pata_original.isdigit() else 0)
                 cajas_guardadas = cajas_nube.get(f, 0)
                 
                 datos_tabla.append({
                     "Archivo": f,
-                    "Pata Final (Editable)": int(pata_num) if pata_num.isdigit() else 0,
+                    "Pata Final (Editable)": pata_guardada,
                     "Cajas": cajas_guardadas
                 })
                 
@@ -412,15 +417,19 @@ if pedido_actual:
                 if not bloqueado:
                     if st.button("💾 Guardar Cambios en Tabla", type="primary", width="stretch"):
                         with st.spinner("Guardando cambios..."):
-                            # 🔥 Guardamos los valores editados en el JSON del pedido en Supabase
                             nuevas_cajas = {}
+                            nuevas_patas = {}
+                            
                             for index, row in df_editado_nuevo.iterrows():
-                                nuevas_cajas[row["Archivo"]] = int(row["Cajas"])
+                                archivo_actual = row["Archivo"]
+                                nuevas_cajas[archivo_actual] = int(row["Cajas"])
+                                nuevas_patas[archivo_actual] = int(row["Pata Final (Editable)"])
                             
                             pedido_data["cajas_estibas"] = nuevas_cajas
-                            nube.subir_pedido_nube(pedido_actual, pedido_data)
+                            pedido_data["patas_estibas"] = nuevas_patas
                             
-                            st.success("✅ Cambios guardados correctamente en la nube.")
+                            nube.subir_pedido_nube(pedido_actual, pedido_data)
+                            st.success("✅ Cambios guardados. La App Móvil ya refleja las nuevas Patas y Cajas.")
                             time.sleep(1.5)
                             st.rerun()
 
@@ -440,6 +449,8 @@ if pedido_actual:
                                     st.session_state["fotos_ocultas"].add(f)
                                     if f in pedido_data["cajas_estibas"]:
                                         del pedido_data["cajas_estibas"][f]
+                                    if f in pedido_data["patas_estibas"]:
+                                        del pedido_data["patas_estibas"][f]
                                 
                                 nube.subir_pedido_nube(pedido_actual, pedido_data)
                                 st.success(f"✅ {len(nombres_a_borrar)} fotos eliminadas correctamente.")
