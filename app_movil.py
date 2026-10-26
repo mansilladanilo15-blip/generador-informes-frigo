@@ -6,7 +6,6 @@ import conexion_nube as nube
 
 st.set_page_config(page_title="App Operarios", page_icon="🚚", layout="centered")
 
-# 🔥 DESACTIVAMOS EL AUTO-REFRESH POR DEFECTO (Causa principal de las recargas)
 if "auto_refresh" not in st.session_state:
     st.session_state["auto_refresh"] = False
 if "fotos_ocultas_movil" not in st.session_state:
@@ -103,6 +102,7 @@ if pedido:
                 st.rerun()
                 
         if fotos_doc:
+            # 🔥 GRILLA SIMÉTRICA CON BOTÓN GRANDE
             cols = st.columns(2)
             for idx, f in enumerate(fotos_doc):
                 with cols[idx % 2]:
@@ -114,12 +114,10 @@ if pedido:
                         </div>
                     ''', unsafe_allow_html=True)
                     
-                    col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
-                    with col_b2:
-                        if st.button("🗑️", key=f"del_doc_{f}"):
-                            nube.borrar_foto_nube(pedido_id, f)
-                            st.session_state["fotos_ocultas_movil"].add(f)
-                            st.rerun()
+                    if st.button("🗑️ Borrar", key=f"del_doc_{f}", width="stretch"):
+                        nube.borrar_foto_nube(pedido_id, f)
+                        st.session_state["fotos_ocultas_movil"].add(f)
+                        st.rerun()
 
     st.divider()
 
@@ -151,12 +149,10 @@ if pedido:
                         </div>
                     ''', unsafe_allow_html=True)
                     
-                    col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
-                    with col_b2:
-                        if st.button("🗑️", key=f"del_estiba_{f}"):
-                            nube.borrar_foto_nube(pedido_id, f)
-                            st.session_state["fotos_ocultas_movil"].add(f)
-                            st.rerun()
+                    if st.button("🗑️ Borrar", key=f"del_estiba_{f}", width="stretch"):
+                        nube.borrar_foto_nube(pedido_id, f)
+                        st.session_state["fotos_ocultas_movil"].add(f)
+                        st.rerun()
         else:
             st.info("No hay fotos de estibas subidas.")
 
@@ -194,12 +190,10 @@ if pedido:
                             </div>
                         ''', unsafe_allow_html=True)
                         
-                        col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
-                        with col_b2:
-                            if st.button("🗑️", key=f"del_{f}"):
-                                nube.borrar_foto_nube(pedido_id, f)
-                                st.session_state["fotos_ocultas_movil"].add(f)
-                                st.rerun()
+                        if st.button("🗑️ Borrar", key=f"del_{f}", width="stretch"):
+                            nube.borrar_foto_nube(pedido_id, f)
+                            st.session_state["fotos_ocultas_movil"].add(f)
+                            st.rerun()
             
             tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
             with tab1:
