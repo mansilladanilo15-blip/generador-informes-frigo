@@ -12,6 +12,17 @@ if "subida_terminada" not in st.session_state:
     st.session_state["subida_terminada"] = False
 if "procesados" not in st.session_state:
     st.session_state["procesados"] = {}
+if "confirmar_borrado" not in st.session_state:
+    st.session_state["confirmar_borrado"] = False
+
+# 🔥 FUNCIÓN PARA MOSTRAR MENSAJE DE BORRADO EXITOSO
+def mostrar_confirmacion_borrado():
+    st.success("✅ Fotos eliminadas de la nube.")
+    if st.button("🔄 Actualizar Galería", type="primary", width="stretch"):
+        st.session_state["confirmar_borrado"] = False
+        st.session_state.clear()
+        st.cache_data.clear()
+        st.rerun()
 
 col_titulo, col_boton = st.columns([4, 1])
 with col_titulo:
@@ -71,7 +82,6 @@ if pedido:
 
     pedido_id = pedido['id']
 
-    # 🔥 BOTÓN PARA BORRAR TODAS LAS FOTOS CON TEMPORIZADOR
     with st.expander("🧨 Zona de Peligro (Borrar todas las fotos)"):
         st.warning("Esto eliminará TODAS las fotos de este pedido (en la nube y en la PC).")
         if st.button("🗑️ Borrar TODAS las fotos del pedido", type="primary", width="stretch"):
@@ -85,12 +95,12 @@ if pedido:
                 pedido_data["patas_estibas"] = {}
                 nube.subir_pedido_nube(pedido_id, pedido_data)
                 
-                st.success("✅ Fotos eliminadas. Recargando...")
-                # 🔥 ESPERAMOS 2 SEGUNDOS Y RECARGAMOS EL NAVEGADOR
-                time.sleep(2)
-                st.session_state.clear()
-                st.cache_data.clear()
-                st.markdown("<script>setTimeout(function(){window.location.reload();}, 1000);</script>", unsafe_allow_html=True)
+                time.sleep(1)
+                st.session_state["confirmar_borrado"] = True
+                st.rerun()
+
+    if st.session_state["confirmar_borrado"]:
+        mostrar_confirmacion_borrado()
 
     pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
     cajas_nube = pedido_data.get("cajas_estibas", {})
@@ -144,7 +154,8 @@ if pedido:
                     
                     if st.button("🗑️ Borrar", key=f"del_doc_{f}", width="stretch"):
                         nube.borrar_foto_nube(pedido_id, f)
-                        time.sleep(1) # Espera a que Supabase borre
+                        time.sleep(1)
+                        st.session_state["confirmar_borrado"] = True
                         st.rerun()
 
     st.divider()
@@ -211,7 +222,8 @@ if pedido:
                     
                     if st.button("🗑️ Borrar", key=f"del_estiba_{f}", width="stretch"):
                         nube.borrar_foto_nube(pedido_id, f)
-                        time.sleep(1) # Espera a que Supabase borre
+                        time.sleep(1)
+                        st.session_state["confirmar_borrado"] = True
                         st.rerun()
         else:
             st.info("No hay fotos de estibas subidas.")
@@ -242,6 +254,7 @@ if pedido:
                         if st.button("🗑️ Borrar", key=f"del_{f}", width="stretch"):
                             nube.borrar_foto_nube(pedido_id, f)
                             time.sleep(1)
+                            st.session_state["confirmar_borrado"] = True
                             st.rerun()
             
             tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
