@@ -6,12 +6,15 @@ import conexion_nube as nube
 
 st.set_page_config(page_title="App Operarios", page_icon="🚚", layout="centered")
 
+# 🔥 DESACTIVAMOS EL AUTO-REFRESH POR DEFECTO (Causa principal de las recargas)
 if "auto_refresh" not in st.session_state:
-    st.session_state["auto_refresh"] = True
+    st.session_state["auto_refresh"] = False
 if "fotos_ocultas_movil" not in st.session_state:
     st.session_state["fotos_ocultas_movil"] = set()
+if "procesados" not in st.session_state:
+    st.session_state["procesados"] = {}
 
-if st.session_state["auto_refresh"] and not st.session_state.get("procesando_foto", False):
+if st.session_state["auto_refresh"]:
     st.markdown("""<script>setTimeout(function(){window.location.reload();}, 30000);</script>""", unsafe_allow_html=True)
 
 col_titulo, col_boton = st.columns([4, 1])
@@ -23,7 +26,7 @@ with col_boton:
 
 with st.sidebar:
     st.subheader("⚙️ Opciones")
-    auto_recarga = st.toggle("Auto-recargar", value=st.session_state["auto_refresh"])
+    auto_recarga = st.toggle("Auto-recargar (cada 30s)", value=st.session_state["auto_refresh"])
     if auto_recarga != st.session_state["auto_refresh"]:
         st.session_state["auto_refresh"] = auto_recarga
         st.rerun()
@@ -77,9 +80,6 @@ if pedido:
 
     pedido_id = pedido['id']
 
-    if "procesados" not in st.session_state:
-        st.session_state["procesados"] = {}
-
     # 0. DOCUMENTACIÓN
     fotos_doc = nube.obtener_fotos_nube(pedido_id)
     fotos_doc = [f for f in fotos_doc if f.startswith("documentacion_") and f not in st.session_state["fotos_ocultas_movil"]]
@@ -89,29 +89,20 @@ if pedido:
         with tab1:
             subidas = st.file_uploader("Subir documentación", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_doc_{pedido_id}")
             if subidas:
-                st.session_state["procesando_foto"] = True
                 for foto in subidas:
                     if f"{pedido_id}_doc_{foto.name}" not in st.session_state["procesados"]:
                         nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
                         nube.subir_foto_nube(pedido_id, nombre, foto.getbuffer())
                         st.session_state["procesados"][f"{pedido_id}_doc_{foto.name}"] = True
-                st.session_state["procesando_foto"] = False
-                st.toast("✅ Documentación subida")
-                time.sleep(1)
                 st.rerun()
         with tab2:
             cam = st.camera_input("Tomar foto", key=f"cam_doc_{pedido_id}_{uuid.uuid4().hex[:6]}")
             if cam:
-                st.session_state["procesando_foto"] = True
                 nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
                 nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
-                st.session_state["procesando_foto"] = False
-                st.toast("✅ Foto guardada")
-                time.sleep(1)
                 st.rerun()
                 
         if fotos_doc:
-            # 🔥 GRILLA SIMÉTRICA DE 2 COLUMNAS
             cols = st.columns(2)
             for idx, f in enumerate(fotos_doc):
                 with cols[idx % 2]:
@@ -120,17 +111,14 @@ if pedido:
                     st.markdown(f'''
                         <div style="text-align:center; margin-bottom: 5px;">
                             <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
-                            <div style="font-size:10px; color:#666; margin-top:2px;">{f}</div>
                         </div>
                     ''', unsafe_allow_html=True)
                     
                     col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
                     with col_b2:
-                        if st.button("🗑️", key=f"del_doc_{f}", help="Borrar foto"):
+                        if st.button("🗑️", key=f"del_doc_{f}"):
                             nube.borrar_foto_nube(pedido_id, f)
                             st.session_state["fotos_ocultas_movil"].add(f)
-                            st.toast("🗑️ Foto borrada")
-                            time.sleep(0.5)
                             st.rerun()
 
     st.divider()
@@ -139,7 +127,6 @@ if pedido:
     fotos_estibas = nube.obtener_fotos_nube(pedido_id)
     fotos_estibas = [f for f in fotos_estibas if f.startswith("estiba_pata_") and f not in st.session_state["fotos_ocultas_movil"]]
     
-    # Leemos el JSON del pedido para saber a qué pata fue asignada cada foto
     pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
     cajas_nube = pedido_data.get("cajas_estibas", {})
     
@@ -148,14 +135,12 @@ if pedido:
 
     with st.expander(f"📦 1. Estibas ({len(fotos_estibas)})", expanded=st.session_state["expand_estibas"]):
         if fotos_estibas:
-            # 🔥 GRILLA SIMÉTRICA DE 2 COLUMNAS (Para que se vea ordenado)
             cols = st.columns(2)
             for idx, f in enumerate(fotos_estibas):
                 with cols[idx % 2]:
                     bytes_img = nube.descargar_foto_nube(pedido_id, f)
                     b64 = base64.b64encode(bytes_img).decode("utf-8")
                     
-                    # Mostramos el número de pata que le asignaste en la PC
                     pata_asignada = f.split("_")[2].replace(".jpg", "").split("_")[0]
                     cajas = cajas_nube.get(f, 0)
                     
@@ -168,42 +153,26 @@ if pedido:
                     
                     col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
                     with col_b2:
-                        if st.button("🗑️", key=f"del_estiba_{f}", help="Borrar foto"):
+                        if st.button("🗑️", key=f"del_estiba_{f}"):
                             nube.borrar_foto_nube(pedido_id, f)
                             st.session_state["fotos_ocultas_movil"].add(f)
-                            st.toast("🗑️ Foto borrada")
-                            time.sleep(0.5)
                             st.rerun()
         else:
             st.info("No hay fotos de estibas subidas.")
 
-        # Formulario para subir nuevas fotos
         tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
         with tab1:
             subida = st.file_uploader("Subir nueva estiba", type=["jpg", "png"], key="gal_estiba")
             if subida:
-                st.session_state["procesando_foto"] = True
                 nombre = f"estiba_pata_99_REVISAR.jpg"
                 nube.subir_foto_nube(pedido_id, nombre, subida.getbuffer())
-                st.session_state["expand_estibas"] = True
-                st.session_state["procesando_foto"] = False
-                st.toast("✅ Estiba guardada, pendiente de revisión en PC.")
-                time.sleep(1)
                 st.rerun()
         with tab2:
             cam = st.camera_input("Tomar foto", key="cam_estiba")
             if cam:
-                st.session_state["procesando_foto"] = True
                 nombre = f"estiba_pata_99_REVISAR.jpg"
                 nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
-                st.session_state["expand_estibas"] = True
-                st.session_state["procesando_foto"] = False
-                st.toast("✅ Estiba guardada, pendiente de revisión en PC.")
-                time.sleep(1)
                 st.rerun()
-
-        if st.button("➕ Agregar Pata", type="secondary", width="stretch"):
-            st.rerun()
 
     st.divider()
 
@@ -214,7 +183,6 @@ if pedido:
         fotos = [f for f in fotos if f.startswith(prefijo) and f not in st.session_state["fotos_ocultas_movil"]]
         with st.expander(f"{titulo} ({len(fotos)})", expanded=False):
             if fotos:
-                # 🔥 GRILLA SIMÉTRICA DE 2 COLUMNAS
                 cols = st.columns(2)
                 for idx, f in enumerate(fotos):
                     with cols[idx % 2]:
@@ -223,43 +191,32 @@ if pedido:
                         st.markdown(f'''
                             <div style="text-align:center; margin-bottom: 5px;">
                                 <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
-                                <div style="font-size:10px; color:#666; margin-top:2px;">{f}</div>
                             </div>
                         ''', unsafe_allow_html=True)
                         
                         col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
                         with col_b2:
-                            if st.button("🗑️", key=f"del_{f}", help="Borrar foto"):
+                            if st.button("🗑️", key=f"del_{f}"):
                                 nube.borrar_foto_nube(pedido_id, f)
                                 st.session_state["fotos_ocultas_movil"].add(f)
-                                st.toast("🗑️ Foto borrada")
-                                time.sleep(0.5)
                                 st.rerun()
             
             tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
             with tab1:
                 subidas = st.file_uploader("Subir fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_{prefijo}")
                 if subidas:
-                    st.session_state["procesando_foto"] = True
                     for s in subidas:
                         file_id = f"{pedido_id}_{prefijo}_{s.name}_{s.size}"
                         if file_id not in st.session_state["procesados"]:
                             nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
                             nube.subir_foto_nube(pedido_id, nombre, s.getbuffer())
                             st.session_state["procesados"][file_id] = True
-                    st.session_state["procesando_foto"] = False
-                    st.toast("✅ Fotos subidas")
-                    time.sleep(1)
                     st.rerun()
             with tab2:
                 cam = st.camera_input("Tomar foto", key=f"cam_{prefijo}_{uuid.uuid4().hex[:6]}")
                 if cam:
-                    st.session_state["procesando_foto"] = True
                     nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
                     nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
-                    st.session_state["procesando_foto"] = False
-                    st.toast("✅ Foto guardada")
-                    time.sleep(1)
                     st.rerun()
 
     mostrar_categoria("2. Fotos Camión", "camion_")
