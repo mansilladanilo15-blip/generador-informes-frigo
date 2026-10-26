@@ -373,7 +373,9 @@ if pedido_actual:
                     if "patas_estibas" not in pedido_data: pedido_data["patas_estibas"] = {}
                     
                     for idx, foto in enumerate(fotos_manuales):
-                        texto_progreso.info(f"⏳ Procesando foto {idx + 1} de {total_fotos}: {foto.name}")
+                        # 🔥 ACTUALIZAR BARRA ANTES DE PROCESAR
+                        texto_progreso.info(f"⏳ Analizando foto {idx + 1} de {total_fotos}: {foto.name}")
+                        
                         resultados = analizar_fotos([(foto.name, foto.getvalue())])
                         
                         for r in resultados:
@@ -397,6 +399,7 @@ if pedido_actual:
                                 pedido_data["patas_estibas"][nuevo_nombre] = 99
                                 errores.append(foto.name)
                         
+                        # 🔥 ACTUALIZAR BARRA DESPUÉS DE PROCESAR
                         progreso.progress((idx + 1) / total_fotos)
                     
                     nube.subir_pedido_nube(pedido_actual, pedido_data)
@@ -411,7 +414,6 @@ if pedido_actual:
                     st.session_state["reinicio_count"] += 1
                     time.sleep(2)
                     st.rerun()
-
         st.divider()
 
         if estibas:
