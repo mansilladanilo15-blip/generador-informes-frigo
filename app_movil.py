@@ -11,7 +11,6 @@ if "auto_refresh" not in st.session_state:
 if "fotos_ocultas_movil" not in st.session_state:
     st.session_state["fotos_ocultas_movil"] = set()
 
-# 🔥 AUTO-REFRESH: Se pausa si el operario está subiendo o borrando fotos
 if st.session_state["auto_refresh"] and not st.session_state.get("procesando_foto", False):
     st.markdown("""<script>setTimeout(function(){window.location.reload();}, 30000);</script>""", unsafe_allow_html=True)
 
@@ -81,10 +80,6 @@ if pedido:
     if "procesados" not in st.session_state:
         st.session_state["procesados"] = {}
 
-    def mostrar_imagen_nube(bytes_img, caption):
-        b64 = base64.b64encode(bytes_img).decode("utf-8")
-        st.markdown(f'<div style="text-align:center;"><img src="data:image/jpeg;base64,{b64}" style="width:100%; border-radius:6px; margin-bottom:8px;"><div style="font-size:12px; color:#666;">{caption}</div></div>', unsafe_allow_html=True)
-
     # 0. DOCUMENTACIÓN
     fotos_doc = nube.obtener_fotos_nube(pedido_id)
     fotos_doc = [f for f in fotos_doc if f.startswith("documentacion_") and f not in st.session_state["fotos_ocultas_movil"]]
@@ -116,41 +111,69 @@ if pedido:
                 st.rerun()
                 
         if fotos_doc:
-            cols = st.columns(3)
+            # 🔥 GRILLA SIMÉTRICA DE 2 COLUMNAS
+            cols = st.columns(2)
             for idx, f in enumerate(fotos_doc):
-                with cols[idx % 3]:
+                with cols[idx % 2]:
                     bytes_img = nube.descargar_foto_nube(pedido_id, f)
-                    mostrar_imagen_nube(bytes_img, f)
-                    if st.button(f"🗑️ Borrar", key=f"del_doc_{f}", width="stretch"):
-                        nube.borrar_foto_nube(pedido_id, f)
-                        st.session_state["fotos_ocultas_movil"].add(f)
-                        st.toast("🗑️ Foto borrada")
-                        time.sleep(0.5)
-                        st.rerun()
+                    b64 = base64.b64encode(bytes_img).decode("utf-8")
+                    st.markdown(f'''
+                        <div style="text-align:center; margin-bottom: 5px;">
+                            <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                            <div style="font-size:10px; color:#666; margin-top:2px;">{f}</div>
+                        </div>
+                    ''', unsafe_allow_html=True)
+                    
+                    col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
+                    with col_b2:
+                        if st.button("🗑️", key=f"del_doc_{f}", help="Borrar foto"):
+                            nube.borrar_foto_nube(pedido_id, f)
+                            st.session_state["fotos_ocultas_movil"].add(f)
+                            st.toast("🗑️ Foto borrada")
+                            time.sleep(0.5)
+                            st.rerun()
 
     st.divider()
 
     # 1. ESTIBAS
     fotos_estibas = nube.obtener_fotos_nube(pedido_id)
     fotos_estibas = [f for f in fotos_estibas if f.startswith("estiba_pata_") and f not in st.session_state["fotos_ocultas_movil"]]
-    cantidad_patas = len(fotos_estibas) + 1
+    
+    # 🔥 CORRECCIÓN DE PATAS FANTASMA:
+    # En lugar de contar las fotos y sumar 1, buscamos cuál es el número de pata más alto
+    # y le sumamos 1 solo a ese, para que no se creen huecos vacíos en el medio.
+    patas_numeros = []
+    for f in fotos_estibas:
+        try:
+            num = int(f.split("_")[2].replace(".jpg", "").split("_")[0])
+            patas_numeros.append(num)
+        except:
+            pass
+    
+    max_pata = max(patas_numeros) if patas_numeros else 0
+    cantidad_patas = max_pata + 1
     
     if "expand_estibas" not in st.session_state:
         st.session_state["expand_estibas"] = True
 
     with st.expander(f"📦 1. Estibas ({len(fotos_estibas)})", expanded=st.session_state["expand_estibas"]):
         for i in range(1, cantidad_patas + 1):
-            nombre_pata = f"estiba_pata_{i}.jpg"
+            # Buscamos si existe alguna foto que empiece con estiba_pata_i
+            foto_pata = next((f for f in fotos_estibas if f.startswith(f"estiba_pata_{i}.jpg") or f.startswith(f"estiba_pata_{i}_")), None)
+            
             with st.container(border=True):
                 st.markdown(f"#### 📦 Pata {i}")
                 
-                if nombre_pata in fotos_estibas:
-                    bytes_img = nube.descargar_foto_nube(pedido_id, nombre_pata)
+                if foto_pata:
+                    bytes_img = nube.descargar_foto_nube(pedido_id, foto_pata)
                     st.success("✅ Foto registrada")
-                    mostrar_imagen_nube(bytes_img, f"Pata {i}")
+                    
+                    b64 = base64.b64encode(bytes_img).decode("utf-8")
+                    st.markdown(f'<div style="text-align:center;"><img src="data:image/jpeg;base64,{b64}" style="width:100%; border-radius:6px; margin-bottom:8px;"><div style="font-size:12px; color:#666;">{foto_pata}</div></div>', unsafe_allow_html=True)
+                    
                     if st.button(f"🗑️ Borrar Pata {i}", key=f"del_foto_{i}", width="stretch"):
-                        nube.borrar_foto_nube(pedido_id, nombre_pata)
-                        st.session_state["fotos_ocultas_movil"].add(nombre_pata)
+                        nube.borrar_foto_nube(pedido_id, foto_pata)
+                        st.session_state["fotos_ocultas_movil"].add(foto_pata)
                         st.toast(f"🗑️ Pata {i} borrada")
                         time.sleep(0.5)
                         st.rerun()
@@ -160,7 +183,7 @@ if pedido:
                         subida = st.file_uploader("Subir", type=["jpg", "png"], key=f"gal_pata_{i}")
                         if subida:
                             st.session_state["procesando_foto"] = True
-                            nube.subir_foto_nube(pedido_id, nombre_pata, subida.getbuffer())
+                            nube.subir_foto_nube(pedido_id, f"estiba_pata_{i}.jpg", subida.getbuffer())
                             st.session_state["expand_estibas"] = True
                             st.session_state["procesando_foto"] = False
                             st.toast(f"✅ Pata {i} guardada")
@@ -170,7 +193,7 @@ if pedido:
                         cam = st.camera_input("Tomar foto", key=f"cam_pata_{i}_{uuid.uuid4().hex[:6]}")
                         if cam:
                             st.session_state["procesando_foto"] = True
-                            nube.subir_foto_nube(pedido_id, nombre_pata, cam.getbuffer())
+                            nube.subir_foto_nube(pedido_id, f"estiba_pata_{i}.jpg", cam.getbuffer())
                             st.session_state["expand_estibas"] = True
                             st.session_state["procesando_foto"] = False
                             st.toast(f"✅ Pata {i} guardada")
@@ -189,22 +212,21 @@ if pedido:
         fotos = [f for f in fotos if f.startswith(prefijo) and f not in st.session_state["fotos_ocultas_movil"]]
         with st.expander(f"{titulo} ({len(fotos)})", expanded=False):
             if fotos:
-                # 🔥 Grilla simétrica de 2 columnas
+                # 🔥 GRILLA SIMÉTRICA DE 2 COLUMNAS
                 cols = st.columns(2)
                 for idx, f in enumerate(fotos):
                     with cols[idx % 2]:
                         bytes_img = nube.descargar_foto_nube(pedido_id, f)
-                        # Hacemos la imagen más alta y con bordes redondeados
                         b64 = base64.b64encode(bytes_img).decode("utf-8")
                         st.markdown(f'''
                             <div style="text-align:center; margin-bottom: 5px;">
-                                <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:200px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                                <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                                <div style="font-size:10px; color:#666; margin-top:2px;">{f}</div>
                             </div>
                         ''', unsafe_allow_html=True)
                         
-                        # Botón de borrar más pequeño y centrado
-                        col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
-                        with col_btn2:
+                        col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
+                        with col_b2:
                             if st.button("🗑️", key=f"del_{f}", help="Borrar foto"):
                                 nube.borrar_foto_nube(pedido_id, f)
                                 st.session_state["fotos_ocultas_movil"].add(f)
