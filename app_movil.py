@@ -6,21 +6,26 @@ import conexion_nube as nube
 
 
 def eliminar_foto_verificada(pedido_id, nombre_foto, intentos=3):
-    """Elimina una foto con la función existente y verifica el listado remoto."""
+    """Elimina una foto y confirma el resultado consultando Storage sin ocultar errores."""
     ultimo_error = None
+
     try:
         nube.borrar_foto_nube(pedido_id, nombre_foto)
     except Exception as exc:
+        # El borrado pudo aplicarse aunque la respuesta fallara; se comprueba Storage.
         ultimo_error = exc
 
-    for intento in range(intentos):
+    total_intentos = max(1, int(intentos))
+    for intento in range(total_intentos):
         try:
-            fotos_restantes = nube.obtener_fotos_nube(pedido_id) or []
+            fotos_restantes = nube.obtener_fotos_nube_verificado(pedido_id)
             if nombre_foto not in fotos_restantes:
                 return True
+            ultimo_error = RuntimeError("La foto todavía aparece en Storage.")
         except Exception as exc:
             ultimo_error = exc
-        if intento < intentos - 1:
+
+        if intento < total_intentos - 1:
             time.sleep(0.8)
 
     detalle = f" Detalle: {ultimo_error}" if ultimo_error else ""
@@ -131,7 +136,7 @@ if pedido:
         if st.button("🗑️ Borrar TODAS las fotos del pedido", type="primary", width="stretch"):
             try:
                 with st.spinner("Eliminando todas las fotos del pedido..."):
-                    fotos_actuales = list(nube.obtener_fotos_nube(pedido_id) or [])
+                    fotos_actuales = list(nube.obtener_fotos_nube_verificado(pedido_id))
                     errores = []
                     for nombre_foto in fotos_actuales:
                         try:
@@ -144,6 +149,14 @@ if pedido:
                         for error in errores:
                             st.write(f"• {error}")
                     else:
+                        # No limpiar metadatos si queda alguna foto o no se puede verificar Storage.
+                        fotos_finales = nube.obtener_fotos_nube_verificado(pedido_id)
+                        if fotos_finales:
+                            raise RuntimeError(
+                                "Quedan fotos en la nube; no se limpiaron los datos de estibas. "
+                                + ", ".join(fotos_finales)
+                            )
+
                         pedidos_actualizados = nube.obtener_pedidos_nube() or []
                         pedido_data = next(
                             (p.copy() for p in pedidos_actualizados
