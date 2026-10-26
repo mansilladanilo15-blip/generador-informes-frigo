@@ -130,9 +130,17 @@ if pedido:
     st.divider()
 
     # 1. ESTIBAS
-    fotos_estibas = nube.obtener_fotos_nube(pedido_id)
-    fotos_estibas = [f for f in fotos_estibas if f.startswith("estiba_pata_") and f not in st.session_state["fotos_ocultas_movil"]]
+    # 🔥 LEER SIEMPRE FRESCO DE LA NUBE Y LIMPIAR SI SE BORRÓ EN PC
+    fotos_estibas_brutas = nube.obtener_fotos_nube(pedido_id)
+    fotos_estibas = [f for f in fotos_estibas_brutas if f.startswith("estiba_pata_") and f not in st.session_state["fotos_ocultas_movil"]]
     
+    if not fotos_estibas_brutas:
+        st.session_state["fotos_ocultas_movil"] = set() # Si la PC borró todo, limpiamos memoria
+
+    pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
+    cajas_nube = pedido_data.get("cajas_estibas", {})
+    patas_nube = pedido_data.get("patas_estibas", {})
+
     if "expand_estibas" not in st.session_state:
         st.session_state["expand_estibas"] = True
 
@@ -144,7 +152,6 @@ if pedido:
         with tab1:
             subidas = st.file_uploader("Selecciona varias fotos", type=["jpg", "png"], accept_multiple_files=True, key="gal_estibas_multi")
             if subidas:
-                # 🔥 BARRA DE PROGRESO
                 progreso = st.progress(0)
                 texto_prog = st.empty()
                 total = len(subidas)
@@ -160,7 +167,7 @@ if pedido:
                 
                 texto_prog.empty()
                 progreso.empty()
-                st.toast("✅ Fotos subidas. Ve a la PC para asignar las patas.")
+                st.toast("✅ Fotos subidas. Ve a la PC para procesar el OCR.")
                 st.rerun()
                 
         with tab2:
@@ -168,7 +175,7 @@ if pedido:
             if cam:
                 nombre = f"estiba_pata_99_REVISAR_{uuid.uuid4().hex[:4]}.jpg"
                 nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
-                st.toast("✅ Foto subida.")
+                st.toast("✅ Foto subida. Ve a la PC para procesar el OCR.")
                 st.rerun()
 
         st.divider()
