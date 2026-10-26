@@ -324,20 +324,16 @@ if pedido_actual:
                             if pata_detectada and pata_detectada != 99:
                                 nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
                                 
-                                # 🔥 EVITAR DUPLICADOS: Verificar si ya está en la lista de fotos de la nube
+                                # 🔥 SOLUCIÓN: Si la pata ya existe, NO la omitimos, la guardamos con un sufijo
                                 if nuevo_nombre in fotos:
+                                    nuevo_nombre = f"estiba_pata_{pata_detectada}_REVISAR.jpg"
                                     omitidas += 1
-                                    continue # Saltar y no subir si ya existe
                                 
                                 nube.subir_foto_nube(pedido_actual, nuevo_nombre, foto.getvalue())
                                 st.session_state["cajas_temporales"][nuevo_nombre] = cajas_detectadas
                                 patas_guardadas += 1
                             else:
-                                nuevo_nombre = f"estiba_pata_99.jpg"
-                                if nuevo_nombre in fotos:
-                                    omitidas += 1
-                                    continue
-                                    
+                                nuevo_nombre = f"estiba_pata_99_REVISAR.jpg"
                                 nube.subir_foto_nube(pedido_actual, nuevo_nombre, foto.getvalue())
                                 errores.append(foto.name)
                         
@@ -347,14 +343,13 @@ if pedido_actual:
                     progreso.empty()
                     
                     if errores:
-                        st.warning(f"⚠️ Se procesaron {patas_guardadas} fotos con pata válida. Las siguientes fotos no se pudieron asignar (se guardaron como Pata 99): {', '.join(errores)}")
+                        st.warning(f"⚠️ Se procesaron {patas_guardadas} fotos. Las siguientes no se pudieron asignar (se guardaron como Pata 99): {', '.join(errores)}")
                     else:
                         st.success(f"✅ Se procesaron y guardaron {patas_guardadas} fotos correctamente.")
                     
                     if omitidas > 0:
-                        st.info(f"ℹ️ Se omitieron {omitidas} fotos porque detectaron una Pata que ya existía en el pedido (para evitar duplicados).")
+                        st.info(f"ℹ️ {omitidas} fotos chocaron con una Pata existente. Se guardaron con el sufijo '_REVISAR' en la tabla para que las revises manualmente.")
                     
-                    # 🔥 LIMPIAR EL CARGADOR Y RECARGAR
                     st.session_state["reinicio_count"] += 1
                     time.sleep(3)
                     st.rerun()
