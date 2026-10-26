@@ -284,7 +284,6 @@ if pedido_actual:
         estibas = [x for x in fotos if x.startswith("estiba_pata_") and x not in st.session_state["fotos_ocultas"]]
         
         if not bloqueado:
-            # 🔥 BOTÓN DE EMERGENCIA PARA LIMPIAR TODO
             if estibas:
                 with st.expander("🧨 Zona de Peligro (Limpiar todas las estibas)"):
                     st.warning("Esto eliminará TODAS las fotos de estibas de este pedido en la nube. Úsalo solo si necesitas empezar de cero.")
@@ -324,7 +323,6 @@ if pedido_actual:
                             if pata_detectada and pata_detectada != 99:
                                 nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
                                 
-                                # 🔥 SOLUCIÓN: Si la pata ya existe, NO la omitimos, la guardamos con un sufijo
                                 if nuevo_nombre in fotos:
                                     nuevo_nombre = f"estiba_pata_{pata_detectada}_REVISAR.jpg"
                                     omitidas += 1
@@ -348,7 +346,7 @@ if pedido_actual:
                         st.success(f"✅ Se procesaron y guardaron {patas_guardadas} fotos correctamente.")
                     
                     if omitidas > 0:
-                        st.info(f"ℹ️ {omitidas} fotos chocaron con una Pata existente. Se guardaron con el sufijo '_REVISAR' en la tabla para que las revises manualmente.")
+                        st.info(f"ℹ️ {omitidas} fotos chocaron con una Pata existente. Se guardaron con el sufijo '_REVISAR' para que las revises manualmente.")
                     
                     st.session_state["reinicio_count"] += 1
                     time.sleep(3)
@@ -374,8 +372,12 @@ if pedido_actual:
             df_editado = pd.DataFrame(datos_tabla)
             
             if not df_editado.empty:
-                df_editado = st.data_editor(
-                    df_editado,
+                # 🔥 GUARDAMOS EL ESTADO ACTUAL EN MEMORIA ANTES DE EDITAR
+                if f"editor_state_{pedido_actual}" not in st.session_state:
+                    st.session_state[f"editor_state_{pedido_actual}"] = df_editado
+
+                df_editado_nuevo = st.data_editor(
+                    st.session_state[f"editor_state_{pedido_actual}"],
                     width="stretch",
                     disabled=bloqueado,
                     hide_index=True,
@@ -389,59 +391,64 @@ if pedido_actual:
                     }
                 )
                 
-                # 🔥 SINCRONIZACIÓN: Si el usuario cambia el número de pata, renombramos la foto en la nube
-                if not bloqueado and st.button("💾 Guardar y Sincronizar Cambios", type="primary", width="stretch"):
-                    with st.spinner("Sincronizando con la App Móvil..."):
-                        cambios = False
-                        for index, row in df_editado.iterrows():
-                            archivo_actual = row["Archivo"]
-                            pata_final = int(row["Pata Final (Editable)"])
-                            
-                            # Extraer el número original del archivo
-                            pata_original = archivo_actual.split("_")[2].replace(".jpg", "").replace("_REVISAR", "")
-                            try:
-                                pata_original = int(pata_original)
-                            except:
-                                pata_original = 0
-                            
-                            if pata_original != pata_final:
-                                nuevo_nombre = f"estiba_pata_{pata_final}.jpg"
-                                if nuevo_nombre in fotos:
-                                    nuevo_nombre = f"estiba_pata_{pata_final}_REVISAR.jpg"
-                                
-                                # Descargar, subir con nuevo nombre y borrar el viejo
-                                bytes_foto = nube.descargar_foto_nube(pedido_actual, archivo_actual)
-                                nube.subir_foto_nube(pedido_actual, nuevo_nombre, bytes_foto)
-                                nube.borrar_foto_nube(pedido_actual, archivo_actual)
-                                cambios = True
-                        
-                        if cambios:
-                            st.success("✅ Cambios guardados. Las fotos se han reasignado en la App Móvil.")
-                            time.sleep(2)
-                            st.rerun()
-                        else:
-                            st.info("No hubo cambios de número de pata para sincronizar.")
+                # Actualizamos la memoria con lo que el usuario acaba de escribir
+                st.session_state[f"editor_state_{pedido_actual}"] = df_editado_nuevo
 
                 if not bloqueado:
+                    if st.button("💾 Guardar y Sincronizar Cambios", type="primary", width="stretch"):
+                        with st.spinner("Sincronizando..."):
+                            cambios = False
+                            for index, row in df_editado_nuevo.iterrows():
+                                archivo_actual = row["Archivo"]
+                                pata_final = int(row["Pata Final (Editable)"])
+                                
+                                pata_original = archivo_actual.split("_")[2].replace(".jpg", "").replace("_REVISAR", "")
+                                try:
+                                    pata_original = int(pata_original)
+                                except:
+                                    pata_original = 0
+                                
+                                if pata_original != pata_final:
+                                    nuevo_nombre = f"estiba_pata_{pata_final}.jpg"
+                                    if nuevo_nombre in fotos:
+                                        nuevo_nombre = f"estiba_pata_{pata_final}_REVISAR.jpg"
+                                    
+                                    bytes_foto = nube.descargar_foto_nube(pedido_actual, archivo_actual)
+                                    nube.subir_foto_nube(pedido_actual, nuevo_nombre, bytes_foto)
+                                    nube.borrar_foto_nube(pedido_actual, archivo_actual)
+                                    cambios = True
+                            
+                            if cambios:
+                                st.success("✅ Cambios guardados y sincronizados con la App Móvil.")
+                                if f"editor_state_{pedido_actual}" in st.session_state:
+                                    del st.session_state[f"editor_state_{pedido_actual}"]
+                                st.session_state["reinicio_count"] += 1
+                                time.sleep(2)
+                                st.rerun()
+                            else:
+                                st.info("No hubo cambios de número de pata para sincronizar.")
+
                     filas_seleccionadas = st.multiselect(
                         "Selecciona las fotos que deseas eliminar (puedes elegir varias):",
-                        options=range(len(df_editado)),
-                        format_func=lambda i: f"Pata {df_editado.iloc[i]['Pata Final (Editable)']} - {df_editado.iloc[i]['Archivo']}",
+                        options=range(len(df_editado_nuevo)),
+                        format_func=lambda i: f"Pata {df_editado_nuevo.iloc[i]['Pata Final (Editable)']} - {df_editado_nuevo.iloc[i]['Archivo']}",
                         key=f"sel_borrar_estibas_{pedido_actual}_{RC}"
                     )
                     
                     if filas_seleccionadas:
                         if st.button("🗑️ Eliminar Fotos Seleccionadas", type="primary", width="stretch"):
                             with st.spinner("Borrando fotos..."):
-                                cant = borrar_fotos_seleccionadas(pedido_actual, df_editado, filas_seleccionadas)
+                                cant = borrar_fotos_seleccionadas(pedido_actual, df_editado_nuevo, filas_seleccionadas)
                                 st.success(f"✅ {cant} fotos eliminadas correctamente.")
+                                if f"editor_state_{pedido_actual}" in st.session_state:
+                                    del st.session_state[f"editor_state_{pedido_actual}"]
                                 st.session_state["reinicio_count"] += 1 
                                 time.sleep(1)
                                 st.rerun()
 
-                total_patas = len(df_editado)
+                total_patas = len(df_editado_nuevo)
                 try:
-                    total_cajas = int(pd.to_numeric(df_editado["Cajas"], errors='coerce').fillna(0).sum())
+                    total_cajas = int(pd.to_numeric(df_editado_nuevo["Cajas"], errors='coerce').fillna(0).sum())
                 except:
                     total_cajas = 0
                 
@@ -453,13 +460,15 @@ if pedido_actual:
                 st.markdown("### ✏️ Revisión Foto por Foto")
                 col_tabla, col_preview = st.columns([1.5, 1])
                 with col_preview:
-                    archivo_sel = st.selectbox("Ver foto:", df_editado["Archivo"].tolist(), key=f"sel_ocr_{RC}_{pedido_actual}")
+                    archivo_sel = st.selectbox("Ver foto:", df_editado_nuevo["Archivo"].tolist(), key=f"sel_ocr_{RC}_{pedido_actual}")
                     if archivo_sel:
                         b = nube.descargar_foto_nube(pedido_actual, archivo_sel)
                         b64 = convertir_a_base64(b, 600)
                         st.markdown(f'<img src="{b64}" style="width:100%; border-radius:8px;">', unsafe_allow_html=True)
                 with col_tabla:
-                    st.info("Edita la Pata y presiona 'Guardar y Sincronizar' para actualizar el nombre de la foto en la App Móvil.")
+                    st.info("Edita la Pata y presiona 'Guardar y Sincronizar' para actualizar la App Móvil.")
+            else:
+                st.info("No hay fotos para mostrar.")
 
     def seccion_extra(titulo, prefijo):
         with st.expander(titulo, expanded=False):
