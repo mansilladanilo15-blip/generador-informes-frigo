@@ -178,13 +178,6 @@ if pedido:
 
     pedido_id = pedido['id']
 
-    if st.session_state.get("confirmar_borrado_movil"):
-        st.success("✅ Borrado confirmado en la nube.")
-        if st.button("🔄 Actualizar Galería", type="primary", width="stretch"):
-            st.session_state["confirmar_borrado_movil"] = False
-            st.session_state.clear()
-            st.cache_data.clear()
-            st.rerun()
 
     with st.expander("🧨 Zona de Peligro (Borrar todas las fotos)"):
         st.warning("Esto eliminará TODAS las fotos de este pedido (en la nube y en la PC).")
