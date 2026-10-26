@@ -464,6 +464,7 @@ if pedido_actual:
             
             datos_tabla = []
             for f in estibas:
+                # Si la foto está en el JSON, usamos esos datos. Si no, usamos su nombre como respaldo.
                 pata_original = f.split("_")[2].replace(".jpg", "").split("_")[0]
                 pata_guardada = patas_nube.get(f, int(pata_original) if pata_original.isdigit() else 0)
                 cajas_guardadas = cajas_nube.get(f, 0)
@@ -474,6 +475,7 @@ if pedido_actual:
                     "Cajas": cajas_guardadas
                 })
                 
+               
             df_editado = pd.DataFrame(datos_tabla)
             
             if not df_editado.empty:
