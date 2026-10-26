@@ -134,6 +134,11 @@ if pedido:
 
     # 1. ESTIBAS
     fotos_estibas_brutas = nube.obtener_fotos_nube(pedido_id)
+    
+    # 🔥 MAGIA: Si en la nube ya no hay fotos, limpiamos la memoria del celular
+    if not fotos_estibas_brutas:
+        st.session_state["fotos_ocultas_movil"] = set()
+
     fotos_estibas = [f for f in fotos_estibas_brutas if f.startswith("estiba_pata_") and f not in st.session_state["fotos_ocultas_movil"]]
     
     if not fotos_estibas_brutas:
