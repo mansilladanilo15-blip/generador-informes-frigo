@@ -5,6 +5,8 @@ import time
 import conexion_nube as nube
 
 st.set_page_config(page_title="App Operarios", page_icon="🚚", layout="centered")
+if "token_fotos" not in st.session_state:
+    st.session_state["token_fotos"] = str(uuid.uuid4())[:6]
 
 if "auto_refresh" not in st.session_state:
     st.session_state["auto_refresh"] = False
@@ -80,66 +82,30 @@ if pedido:
     cajas_nube = pedido_data.get("cajas_estibas", {})
     patas_nube = pedido_data.get("patas_estibas", {})
 
-    # 0. DOCUMENTACIÓN
-    fotos_doc_brutas = nube.obtener_fotos_nube(pedido_id)
-    if not fotos_doc_brutas:
-        st.session_state["fotos_ocultas_movil"] = set()
-    fotos_doc = [f for f in fotos_doc_brutas if f.startswith("documentacion_") and f not in st.session_state["fotos_ocultas_movil"]]
-    
-    with st.expander(f"📄 0. Documentación ({len(fotos_doc)})", expanded=True):
-        tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
-        with tab1:
-            subidas = st.file_uploader("Subir documentación", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_doc_{pedido_id}")
-            if subidas and not st.session_state["subida_terminada"]:
-                progreso = st.progress(0)
-                texto_prog = st.empty()
-                total = len(subidas)
-                
-                for idx, foto in enumerate(subidas):
-                    if f"{pedido_id}_doc_{foto.name}" not in st.session_state["procesados"]:
-                        texto_prog.info(f"⏳ Subiendo {idx + 1} de {total}: {foto.name}")
-                        nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
-                        nube.subir_foto_nube(pedido_id, nombre, foto.getbuffer())
-                        st.session_state["procesados"][f"{pedido_id}_doc_{foto.name}"] = True
-                    progreso.progress((idx + 1) / total)
-                
-                st.session_state["subida_terminada"] = True
-                progreso.empty()
-                texto_prog.empty()
-                st.success("✅ Documentación subida correctamente.")
-                st.button("👁️ Ver fotos subidas", on_click=lambda: st.session_state.update({"subida_terminada": False}))
-                
-        with tab2:
-            cam = st.camera_input("Tomar foto", key=f"cam_doc_{pedido_id}_{uuid.uuid4().hex[:6]}")
-            if cam:
-                nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
-                nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
-                st.rerun()
-                
         if fotos_doc:
             cols = st.columns(2)
             for idx, f in enumerate(fotos_doc):
                 with cols[idx % 2]:
                     bytes_img = nube.descargar_foto_nube(pedido_id, f)
                     b64 = base64.b64encode(bytes_img).decode("utf-8")
+                    
+                    # 🔥 EL TOKEN OBLIGA AL CELULAR A DESCARGAR LA FOTO NUEVA
+                    token = st.session_state["token_fotos"]
                     st.markdown(f'''
                         <div style="text-align:center; margin-bottom: 5px;">
-                            <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                            <img src="data:image/jpeg;base64,{b64}?t={token}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
                         </div>
                     ''', unsafe_allow_html=True)
                     
-                    if st.button("🗑️ Borrar", key=f"del_doc_{f}", width="stretch"):
+                    if st.button("🗑️ Borrar", key=f"del_doc_{f}_{token}", width="stretch"):
                         nube.borrar_foto_nube(pedido_id, f)
                         st.session_state["fotos_ocultas_movil"].add(f)
-                        st.cache_data.clear()
+                        st.session_state["token_fotos"] = str(uuid.uuid4())[:6] # Cambia el token para forzar borrado
                         st.rerun()
-
-    st.divider()
-
     # 1. ESTIBAS
     fotos_estibas_brutas = nube.obtener_fotos_nube(pedido_id)
     
-    # 🔥 Si la nube está vacía, limpiamos la memoria
+    # Limpiamos memoria si está vacío
     if not fotos_estibas_brutas:
         st.session_state["fotos_ocultas_movil"] = set()
         
@@ -194,22 +160,22 @@ if pedido:
                     pata_asignada = patas_nube.get(f, f.split("_")[2].replace(".jpg", "").split("_")[0])
                     cajas = cajas_nube.get(f, 0)
                     
+                    # 🔥 EL TOKEN OBLIGA AL CELULAR A DESCARGAR LA FOTO NUEVA
+                    token = st.session_state["token_fotos"]
                     st.markdown(f'''
                         <div style="text-align:center; margin-bottom: 5px;">
-                            <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                            <img src="data:image/jpeg;base64,{b64}?t={token}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
                             <div style="font-size:12px; color:#1a4d8f; font-weight:bold; margin-top:2px;">📦 Pata {pata_asignada} ({cajas} cajas)</div>
                         </div>
                     ''', unsafe_allow_html=True)
                     
-                    if st.button("🗑️ Borrar", key=f"del_estiba_{f}", width="stretch"):
+                    if st.button("🗑️ Borrar", key=f"del_estiba_{f}_{token}", width="stretch"):
                         nube.borrar_foto_nube(pedido_id, f)
                         st.session_state["fotos_ocultas_movil"].add(f)
-                        st.cache_data.clear()
+                        st.session_state["token_fotos"] = str(uuid.uuid4())[:6]
                         st.rerun()
         else:
             st.info("No hay fotos de estibas subidas.")
-
-    st.divider()
 
     # OTRAS CATEGORÍAS
     st.markdown("### 📸 Otras Categorías")
@@ -226,16 +192,18 @@ if pedido:
                     with cols[idx % 2]:
                         bytes_img = nube.descargar_foto_nube(pedido_id, f)
                         b64 = base64.b64encode(bytes_img).decode("utf-8")
+                        
+                        token = st.session_state["token_fotos"]
                         st.markdown(f'''
                             <div style="text-align:center; margin-bottom: 5px;">
-                                <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                                <img src="data:image/jpeg;base64,{b64}?t={token}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
                             </div>
                         ''', unsafe_allow_html=True)
                         
-                        if st.button("🗑️ Borrar", key=f"del_{f}", width="stretch"):
+                        if st.button("🗑️ Borrar", key=f"del_{f}_{token}", width="stretch"):
                             nube.borrar_foto_nube(pedido_id, f)
                             st.session_state["fotos_ocultas_movil"].add(f)
-                            st.cache_data.clear()
+                            st.session_state["token_fotos"] = str(uuid.uuid4())[:6]
                             st.rerun()
             
             tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
