@@ -65,6 +65,12 @@ def limpiar_referencias_estiba(pedido_id, nombre_foto, intentos=3):
 
             cajas = dict(cajas_originales)
             patas = dict(patas_originales)
+
+            # Si esta foto no tiene referencias de estiba, no hace falta escribir
+            # nuevamente el pedido (por ejemplo, al borrar documentación).
+            if nombre_foto not in cajas and nombre_foto not in patas:
+                return True
+
             cajas.pop(nombre_foto, None)
             patas.pop(nombre_foto, None)
             pedido_data["cajas_estibas"] = cajas
@@ -184,46 +190,103 @@ if pedido:
         st.warning("Esto eliminará TODAS las fotos de este pedido (en la nube y en la PC).")
         if st.button("🗑️ Borrar TODAS las fotos del pedido", type="primary", width="stretch"):
             try:
-                with st.spinner("Eliminando todas las fotos del pedido..."):
+                with st.spinner("Eliminando y verificando las fotos del pedido..."):
+                    # La consulta inicial es crítica: si falla, no debemos interpretar
+                    # el error como si el pedido no tuviera fotos.
                     fotos_actuales = list(nube.obtener_fotos_nube_verificado(pedido_id))
+                    eliminadas = []
                     errores = []
+
                     for nombre_foto in fotos_actuales:
                         try:
                             eliminar_foto_verificada(pedido_id, nombre_foto)
+                            eliminadas.append(nombre_foto)
+                            # Mantener los metadatos alineados incluso si el borrado
+                            # masivo termina parcialmente.
+                            try:
+                                limpiar_referencias_estiba(pedido_id, nombre_foto)
+                            except Exception as exc_meta:
+                                errores.append(
+                                    f"{nombre_foto}: foto borrada, pero no se pudieron "
+                                    f"actualizar sus datos de estiba ({exc_meta})"
+                                )
                         except Exception as exc:
-                            errores.append(f"{nombre_foto}: {exc}")
+                            errores.append(f"{nombre_foto}: no se confirmó el borrado ({exc})")
 
-                    if errores:
-                        st.error("No se confirmaron todas las eliminaciones. No se limpiaron los datos de estibas.")
-                        for error in errores:
-                            st.write(f"• {error}")
+                    # Volver a consultar Storage aunque haya habido errores para
+                    # informar el estado real, sin ocultar fallos de consulta.
+                    fotos_finales = list(nube.obtener_fotos_nube_verificado(pedido_id))
+
+                    if fotos_finales:
+                        st.error(
+                            f"Borrado parcial: {len(eliminadas)} foto(s) eliminada(s); "
+                            f"{len(fotos_finales)} foto(s) todavía permanecen en la nube. "
+                            "No se vaciaron todos los datos de estiba."
+                        )
+                        st.write("**Fotos que todavía están en la nube:**")
+                        for nombre in fotos_finales:
+                            st.write(f"• {nombre}")
+                        if errores:
+                            st.write("**Detalles de los problemas detectados:**")
+                            for error in errores:
+                                st.write(f"• {error}")
                     else:
-                        # No limpiar metadatos si queda alguna foto o no se puede verificar Storage.
-                        fotos_finales = nube.obtener_fotos_nube_verificado(pedido_id)
-                        if fotos_finales:
-                            raise RuntimeError(
-                                "Quedan fotos en la nube; no se limpiaron los datos de estibas. "
-                                + ", ".join(fotos_finales)
-                            )
-
-                        pedidos_actualizados = nube.obtener_pedidos_nube() or []
+                        # Solo si Storage confirma que no quedan fotos, vaciar ambos
+                        # diccionarios y comprobar que el pedido quedó guardado.
+                        pedidos_actualizados = nube.obtener_pedidos_nube()
                         pedido_data = next(
                             (p.copy() for p in pedidos_actualizados
                              if str(p.get("id")) == str(pedido_id)),
-                            None
+                            None,
                         )
                         if pedido_data is None:
-                            raise RuntimeError("No se encontró el pedido para actualizar sus datos.")
+                            raise RuntimeError(
+                                "No quedan fotos en Storage, pero no se encontró el pedido "
+                                "para verificar la limpieza de los datos de estiba."
+                            )
+
                         pedido_data["cajas_estibas"] = {}
                         pedido_data["patas_estibas"] = {}
                         nube.subir_pedido_nube(pedido_id, pedido_data)
+
+                        pedidos_verificacion = nube.obtener_pedidos_nube()
+                        pedido_guardado = next(
+                            (p for p in pedidos_verificacion
+                             if str(p.get("id")) == str(pedido_id)),
+                            None,
+                        )
+                        if pedido_guardado is None:
+                            raise RuntimeError(
+                                "No se pudo volver a leer el pedido después de guardar los datos."
+                            )
+                        if (pedido_guardado.get("cajas_estibas", {}) or {}) or (
+                            pedido_guardado.get("patas_estibas", {}) or {}
+                        ):
+                            raise RuntimeError(
+                                "Las fotos ya no están en Storage, pero Supabase todavía "
+                                "conserva datos de estiba. Revise el pedido antes de continuar."
+                            )
+
                         st.session_state["confirmar_borrado_movil"] = True
                         st.session_state["procesados"] = {}
                         st.session_state["subida_terminada"] = False
                         st.cache_data.clear()
+                        if errores:
+                            st.warning(
+                                "Las fotos ya no están en Storage y los datos de estiba "
+                                "se verificaron vacíos, pero se detectaron incidencias durante "
+                                "el proceso. Revise los detalles antes de continuar."
+                            )
+                            for error in errores:
+                                st.write(f"• {error}")
+                        else:
+                            st.success(
+                                f"Borrado completo verificado: {len(eliminadas)} foto(s) eliminada(s) "
+                                "y datos de estiba sincronizados."
+                            )
                         st.rerun()
             except Exception as exc:
-                st.error(f"❌ Error al borrar las fotos: {exc}")
+                st.error(f"❌ No se pudo completar/verificar el borrado masivo: {exc}")
 
     pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
     cajas_nube = pedido_data.get("cajas_estibas", {})
