@@ -13,15 +13,15 @@ if "subida_terminada" not in st.session_state:
 if "procesados" not in st.session_state:
     st.session_state["procesados"] = {}
 
-# 🔥 BOTÓN DE RECARGA: Borra TODA la memoria de la sesión para forzar sincronización
 col_titulo, col_boton = st.columns([4, 1])
 with col_titulo:
     st.title("📱 App de Operarios")
 with col_boton:
     if st.button("🔄 Sincronizar", width="stretch"):
-        st.session_state.clear() # Destruye la memoria local
-        st.cache_data.clear()    # Destruye la caché de imágenes
-        st.rerun()
+        st.session_state.clear()
+        st.cache_data.clear()
+        # 🔥 Fuerza la recarga total del navegador
+        st.markdown("<script>window.location.reload();</script>", unsafe_allow_html=True)
 
 todos_los_pedidos = nube.obtener_pedidos_nube()
 
@@ -72,12 +72,33 @@ if pedido:
 
     pedido_id = pedido['id']
 
+    # 🔥 BOTÓN PARA BORRAR TODAS LAS FOTOS DE ESTE PEDIDO
+    with st.expander("🧨 Zona de Peligro (Borrar todas las fotos)"):
+        st.warning("Esto eliminará TODAS las fotos de este pedido (en la nube y en la PC).")
+        if st.button("🗑️ Borrar TODAS las fotos del pedido", type="primary", width="stretch"):
+            with st.spinner("Eliminando todas las fotos de la nube..."):
+                fotos_actuales = nube.obtener_fotos_nube(pedido_id)
+                for f in fotos_actuales:
+                    nube.borrar_foto_nube(pedido_id, f)
+                
+                # Borramos también las cajas del JSON
+                pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
+                pedido_data["cajas_estibas"] = {}
+                pedido_data["patas_estibas"] = {}
+                nube.subir_pedido_nube(pedido_id, pedido_data)
+                
+                st.success("✅ Fotos eliminadas.")
+                time.sleep(1)
+                # 🔥 Limpia memoria y recarga el navegador
+                st.session_state.clear()
+                st.cache_data.clear()
+                st.markdown("<script>window.location.reload();</script>", unsafe_allow_html=True)
+
     pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
     cajas_nube = pedido_data.get("cajas_estibas", {})
     patas_nube = pedido_data.get("patas_estibas", {})
 
     # 0. DOCUMENTACIÓN
-    # 🔥 LEEMOS DIRECTO DE LA NUBE CADA VEZ
     fotos_doc = nube.obtener_fotos_nube(pedido_id)
     fotos_doc = [f for f in fotos_doc if f.startswith("documentacion_")]
     
@@ -130,9 +151,8 @@ if pedido:
     st.divider()
 
     # 1. ESTIBAS
-    # 🔥 LEEMOS DIRECTO DE LA NUBE CADA VEZ
-    fotos_estibas_brutas = nube.obtener_fotos_nube(pedido_id)
-    fotos_estibas = [f for f in fotos_estibas_brutas if f.startswith("estiba_pata_")]
+    fotos_estibas = nube.obtener_fotos_nube(pedido_id)
+    fotos_estibas = [f for f in fotos_estibas if f.startswith("estiba_pata_")]
     
     if "expand_estibas" not in st.session_state:
         st.session_state["expand_estibas"] = True
@@ -202,7 +222,6 @@ if pedido:
     st.markdown("### 📸 Otras Categorías")
     
     def mostrar_categoria(titulo, prefijo):
-        # 🔥 LEEMOS DIRECTO DE LA NUBE CADA VEZ
         fotos_brutas = nube.obtener_fotos_nube(pedido_id)
         fotos = [f for f in fotos_brutas if f.startswith(prefijo)]
         
