@@ -34,23 +34,72 @@ def eliminar_foto_verificada(pedido_id, nombre_foto, intentos=3):
     )
 
 
-def limpiar_referencias_estiba(pedido_id, nombre_foto):
-    """Limpia solo las referencias de la foto en los campos existentes."""
-    pedidos = nube.obtener_pedidos_nube() or []
-    pedido_data = next(
-        (p.copy() for p in pedidos if str(p.get("id")) == str(pedido_id)),
-        None
-    )
-    if pedido_data is None:
-        raise RuntimeError("No se encontró el pedido para limpiar los datos de estiba.")
+def limpiar_referencias_estiba(pedido_id, nombre_foto, intentos=3):
+    """Elimina solo las referencias de una foto y confirma el guardado en Supabase.
 
-    cajas = pedido_data.get("cajas_estibas", {}) or {}
-    patas = pedido_data.get("patas_estibas", {}) or {}
-    cajas.pop(nombre_foto, None)
-    patas.pop(nombre_foto, None)
-    pedido_data["cajas_estibas"] = cajas
-    pedido_data["patas_estibas"] = patas
-    nube.subir_pedido_nube(pedido_id, pedido_data)
+    Conserva las demás estibas y cualquier otro campo del pedido. Si Supabase
+    falla temporalmente, vuelve a leer y reintenta antes de informar un error.
+    """
+    ultimo_error = None
+    total_intentos = max(1, int(intentos))
+
+    for intento in range(total_intentos):
+        try:
+            pedidos = nube.obtener_pedidos_nube()
+            pedido_data = next(
+                (p.copy() for p in pedidos if str(p.get("id")) == str(pedido_id)),
+                None,
+            )
+            if pedido_data is None:
+                raise RuntimeError(
+                    "No se encontró el pedido en la nube para actualizar los datos de estiba."
+                )
+
+            # Copiar los diccionarios evita modificar accidentalmente datos en memoria.
+            cajas_originales = pedido_data.get("cajas_estibas", {}) or {}
+            patas_originales = pedido_data.get("patas_estibas", {}) or {}
+            if not isinstance(cajas_originales, dict) or not isinstance(patas_originales, dict):
+                raise RuntimeError(
+                    "Los campos cajas_estibas o patas_estibas no tienen el formato esperado."
+                )
+
+            cajas = dict(cajas_originales)
+            patas = dict(patas_originales)
+            cajas.pop(nombre_foto, None)
+            patas.pop(nombre_foto, None)
+            pedido_data["cajas_estibas"] = cajas
+            pedido_data["patas_estibas"] = patas
+
+            nube.subir_pedido_nube(pedido_id, pedido_data)
+
+            # Confirmar leyendo nuevamente la fila; no asumir que el upsert bastó.
+            pedidos_verificacion = nube.obtener_pedidos_nube()
+            pedido_guardado = next(
+                (p for p in pedidos_verificacion if str(p.get("id")) == str(pedido_id)),
+                None,
+            )
+            if pedido_guardado is None:
+                raise RuntimeError("No se pudo volver a leer el pedido después de guardarlo.")
+
+            cajas_guardadas = pedido_guardado.get("cajas_estibas", {}) or {}
+            patas_guardadas = pedido_guardado.get("patas_estibas", {}) or {}
+            if nombre_foto not in cajas_guardadas and nombre_foto not in patas_guardadas:
+                return True
+
+            raise RuntimeError(
+                f"Supabase todavía conserva referencias a la foto '{nombre_foto}'."
+            )
+
+        except Exception as exc:
+            ultimo_error = exc
+            if intento < total_intentos - 1:
+                time.sleep(0.8)
+
+    raise RuntimeError(
+        "La foto ya fue eliminada del almacenamiento, pero no se pudo confirmar "
+        "la actualización de sus datos de estiba. No se modificaron los datos de "
+        f"otras fotos. Detalle: {ultimo_error}"
+    )
 
 
 
@@ -309,7 +358,7 @@ if pedido:
                             st.cache_data.clear()
                             st.rerun()
                         except Exception as exc:
-                            st.error(f"❌ No se pudo borrar la foto de estiba: {exc}")
+                            st.error(f"❌ No se pudo completar la eliminación/sincronización de la foto de estiba: {exc}")
         else:
             st.info("No hay fotos de estibas subidas.")
 
