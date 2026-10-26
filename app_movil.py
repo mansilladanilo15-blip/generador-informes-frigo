@@ -243,11 +243,13 @@ if pedido:
     st.divider()
 
     # 1. ESTIBAS
-    fotos_estibas = nube.obtener_fotos_nube(pedido_id)
-    fotos_estibas = [f for f in fotos_estibas if f.startswith("estiba_pata_")]
+    # 🔥 Forzamos a que el celular lea directo de la nube
+    fotos_estibas_brutas = nube.obtener_fotos_nube_verificado(pedido_id)
+    fotos_estibas = [f for f in fotos_estibas_brutas if f.startswith("estiba_pata_")]
     
-    if "expand_estibas" not in st.session_state:
-        st.session_state["expand_estibas"] = True
+    # Limpiamos la memoria de fotos ocultas para que no haya fantasmas
+    if "fotos_ocultas_movil" in st.session_state:
+        del st.session_state["fotos_ocultas_movil"]
 
     with st.expander(f"📦 1. Estibas ({len(fotos_estibas)})", expanded=st.session_state["expand_estibas"]):
         
