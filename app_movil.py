@@ -122,7 +122,7 @@ if "confirmar_borrado_movil" not in st.session_state:
 
 col_titulo, col_boton = st.columns([4, 1])
 with col_titulo:
-    st.title("📱 FRIGORIFICO DUMESTRE")
+    st.title("📱 Frigorifico Dumestre")
 with col_boton:
     if st.button("🔄 Sincronizar", width="stretch"):
         st.session_state.clear()
