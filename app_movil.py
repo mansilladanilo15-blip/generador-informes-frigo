@@ -8,26 +8,20 @@ st.set_page_config(page_title="App Operarios", page_icon="🚚", layout="centere
 
 if "auto_refresh" not in st.session_state:
     st.session_state["auto_refresh"] = False
-if "fotos_ocultas_movil" not in st.session_state:
-    st.session_state["fotos_ocultas_movil"] = set()
-if "procesados" not in st.session_state:
-    st.session_state["procesados"] = {}
 if "subida_terminada" not in st.session_state:
     st.session_state["subida_terminada"] = False
+if "procesados" not in st.session_state:
+    st.session_state["procesados"] = {}
 
-if st.session_state["auto_refresh"]:
-    st.markdown("""<script>setTimeout(function(){window.location.reload();}, 30000);</script>""", unsafe_allow_html=True)
-
+# 🔥 BOTÓN DE RECARGA: Borra TODA la memoria de la sesión para forzar sincronización
 col_titulo, col_boton = st.columns([4, 1])
 with col_titulo:
     st.title("📱 App de Operarios")
 with col_boton:
-    if st.button("🔄 Recargar", width="stretch"):
-        # 🔥 TRUCO MAESTRO: Forzamos la recarga total de la página
-        st.session_state["subida_terminada"] = False
-        st.session_state["fotos_ocultas_movil"] = set()
-        st.cache_data.clear()
-        st.markdown("<script>window.location.reload();</script>", unsafe_allow_html=True)
+    if st.button("🔄 Sincronizar", width="stretch"):
+        st.session_state.clear() # Destruye la memoria local
+        st.cache_data.clear()    # Destruye la caché de imágenes
+        st.rerun()
 
 todos_los_pedidos = nube.obtener_pedidos_nube()
 
@@ -83,12 +77,9 @@ if pedido:
     patas_nube = pedido_data.get("patas_estibas", {})
 
     # 0. DOCUMENTACIÓN
-    fotos_doc_brutas = nube.obtener_fotos_nube(pedido_id)
-    # Si la PC borró todo, la nube estará vacía y limpiamos la memoria
-    if not fotos_doc_brutas:
-        st.session_state["fotos_ocultas_movil"] = set()
-        
-    fotos_doc = [f for f in fotos_doc_brutas if f.startswith("documentacion_") and f not in st.session_state["fotos_ocultas_movil"]]
+    # 🔥 LEEMOS DIRECTO DE LA NUBE CADA VEZ
+    fotos_doc = nube.obtener_fotos_nube(pedido_id)
+    fotos_doc = [f for f in fotos_doc if f.startswith("documentacion_")]
     
     with st.expander(f"📄 0. Documentación ({len(fotos_doc)})", expanded=True):
         tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
@@ -134,17 +125,14 @@ if pedido:
                     
                     if st.button("🗑️ Borrar", key=f"del_doc_{f}", width="stretch"):
                         nube.borrar_foto_nube(pedido_id, f)
-                        st.session_state["fotos_ocultas_movil"].add(f)
                         st.rerun()
 
     st.divider()
 
     # 1. ESTIBAS
+    # 🔥 LEEMOS DIRECTO DE LA NUBE CADA VEZ
     fotos_estibas_brutas = nube.obtener_fotos_nube(pedido_id)
-    if not fotos_estibas_brutas:
-        st.session_state["fotos_ocultas_movil"] = set()
-        
-    fotos_estibas = [f for f in fotos_estibas_brutas if f.startswith("estiba_pata_") and f not in st.session_state["fotos_ocultas_movil"]]
+    fotos_estibas = [f for f in fotos_estibas_brutas if f.startswith("estiba_pata_")]
     
     if "expand_estibas" not in st.session_state:
         st.session_state["expand_estibas"] = True
@@ -204,7 +192,6 @@ if pedido:
                     
                     if st.button("🗑️ Borrar", key=f"del_estiba_{f}", width="stretch"):
                         nube.borrar_foto_nube(pedido_id, f)
-                        st.session_state["fotos_ocultas_movil"].add(f)
                         st.rerun()
         else:
             st.info("No hay fotos de estibas subidas.")
@@ -215,11 +202,10 @@ if pedido:
     st.markdown("### 📸 Otras Categorías")
     
     def mostrar_categoria(titulo, prefijo):
+        # 🔥 LEEMOS DIRECTO DE LA NUBE CADA VEZ
         fotos_brutas = nube.obtener_fotos_nube(pedido_id)
-        if not fotos_brutas:
-            st.session_state["fotos_ocultas_movil"] = set()
-            
-        fotos = [f for f in fotos_brutas if f.startswith(prefijo) and f not in st.session_state["fotos_ocultas_movil"]]
+        fotos = [f for f in fotos_brutas if f.startswith(prefijo)]
+        
         with st.expander(f"{titulo} ({len(fotos)})", expanded=False):
             if fotos:
                 cols = st.columns(2)
@@ -236,7 +222,6 @@ if pedido:
                         
                         if st.button("🗑️ Borrar", key=f"del_{f}", width="stretch"):
                             nube.borrar_foto_nube(pedido_id, f)
-                            st.session_state["fotos_ocultas_movil"].add(f)
                             st.rerun()
             
             tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
