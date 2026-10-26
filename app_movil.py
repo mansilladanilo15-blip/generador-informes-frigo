@@ -12,6 +12,8 @@ if "fotos_ocultas_movil" not in st.session_state:
     st.session_state["fotos_ocultas_movil"] = set()
 if "procesados" not in st.session_state:
     st.session_state["procesados"] = {}
+if "subida_terminada" not in st.session_state:
+    st.session_state["subida_terminada"] = False # 🔥 CONTROL DE REFRESCOS
 
 if st.session_state["auto_refresh"]:
     st.markdown("""<script>setTimeout(function(){window.location.reload();}, 30000);</script>""", unsafe_allow_html=True)
@@ -21,6 +23,7 @@ with col_titulo:
     st.title("📱 App de Operarios")
 with col_boton:
     if st.button("🔄 Recargar", width="stretch"):
+        st.session_state["subida_terminada"] = False
         st.rerun()
 
 todos_los_pedidos = nube.obtener_pedidos_nube()
@@ -84,8 +87,7 @@ if pedido:
         tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
         with tab1:
             subidas = st.file_uploader("Subir documentación", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_doc_{pedido_id}")
-            if subidas:
-                # 🔥 BARRA DE PROGRESO
+            if subidas and not st.session_state["subida_terminada"]:
                 progreso = st.progress(0)
                 texto_prog = st.empty()
                 total = len(subidas)
@@ -98,16 +100,17 @@ if pedido:
                         st.session_state["procesados"][f"{pedido_id}_doc_{foto.name}"] = True
                     progreso.progress((idx + 1) / total)
                 
-                texto_prog.empty()
+                st.session_state["subida_terminada"] = True
                 progreso.empty()
-                st.toast("✅ Documentación subida")
-                st.rerun()
+                texto_prog.empty()
+                st.success("✅ Documentación subida correctamente.")
+                st.button("👁️ Ver fotos subidas", on_click=lambda: st.session_state.update({"subida_terminada": False}))
+                
         with tab2:
             cam = st.camera_input("Tomar foto", key=f"cam_doc_{pedido_id}_{uuid.uuid4().hex[:6]}")
             if cam:
                 nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
                 nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
-                st.toast("✅ Foto guardada")
                 st.rerun()
                 
         if fotos_doc:
@@ -130,28 +133,23 @@ if pedido:
     st.divider()
 
     # 1. ESTIBAS
-    # 🔥 LEER SIEMPRE FRESCO DE LA NUBE Y LIMPIAR SI SE BORRÓ EN PC
     fotos_estibas_brutas = nube.obtener_fotos_nube(pedido_id)
     fotos_estibas = [f for f in fotos_estibas_brutas if f.startswith("estiba_pata_") and f not in st.session_state["fotos_ocultas_movil"]]
     
     if not fotos_estibas_brutas:
-        st.session_state["fotos_ocultas_movil"] = set() # Si la PC borró todo, limpiamos memoria
-
-    pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
-    cajas_nube = pedido_data.get("cajas_estibas", {})
-    patas_nube = pedido_data.get("patas_estibas", {})
+        st.session_state["fotos_ocultas_movil"] = set()
 
     if "expand_estibas" not in st.session_state:
         st.session_state["expand_estibas"] = True
 
     with st.expander(f"📦 1. Estibas ({len(fotos_estibas)})", expanded=st.session_state["expand_estibas"]):
         
-        st.info("Sube todas las fotos de una vez. El administrador en la PC se encargará de asignar las patas.")
+        st.info("Sube todas las fotos de una vez. El administrador en la PC procesará el OCR.")
         tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
         
         with tab1:
             subidas = st.file_uploader("Selecciona varias fotos", type=["jpg", "png"], accept_multiple_files=True, key="gal_estibas_multi")
-            if subidas:
+            if subidas and not st.session_state["subida_terminada"]:
                 progreso = st.progress(0)
                 texto_prog = st.empty()
                 total = len(subidas)
@@ -165,17 +163,17 @@ if pedido:
                         st.session_state["procesados"][file_id] = True
                     progreso.progress((idx + 1) / total)
                 
-                texto_prog.empty()
+                st.session_state["subida_terminada"] = True
                 progreso.empty()
-                st.toast("✅ Fotos subidas. Ve a la PC para procesar el OCR.")
-                st.rerun()
+                texto_prog.empty()
+                st.success("✅ Fotos subidas correctamente. Ya puedes ir a la PC a procesarlas.")
+                st.button("👁️ Ver fotos subidas", on_click=lambda: st.session_state.update({"subida_terminada": False}))
                 
         with tab2:
             cam = st.camera_input("Tomar foto", key="cam_estiba")
             if cam:
                 nombre = f"estiba_pata_99_REVISAR_{uuid.uuid4().hex[:4]}.jpg"
                 nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
-                st.toast("✅ Foto subida. Ve a la PC para procesar el OCR.")
                 st.rerun()
 
         st.divider()
@@ -232,8 +230,7 @@ if pedido:
             tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
             with tab1:
                 subidas = st.file_uploader("Subir fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_{prefijo}")
-                if subidas:
-                    # 🔥 BARRA DE PROGRESO
+                if subidas and not st.session_state["subida_terminada"]:
                     progreso = st.progress(0)
                     texto_prog = st.empty()
                     total = len(subidas)
@@ -247,16 +244,16 @@ if pedido:
                             st.session_state["procesados"][file_id] = True
                         progreso.progress((idx + 1) / total)
                     
-                    texto_prog.empty()
+                    st.session_state["subida_terminada"] = True
                     progreso.empty()
-                    st.toast("✅ Fotos subidas")
-                    st.rerun()
+                    texto_prog.empty()
+                    st.success("✅ Fotos subidas correctamente.")
+                    st.button("👁️ Ver fotos subidas", on_click=lambda: st.session_state.update({"subida_terminada": False}))
             with tab2:
                 cam = st.camera_input("Tomar foto", key=f"cam_{prefijo}_{uuid.uuid4().hex[:6]}")
                 if cam:
                     nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
                     nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
-                    st.toast("✅ Foto guardada")
                     st.rerun()
 
     mostrar_categoria("2. Fotos Camión", "camion_")
