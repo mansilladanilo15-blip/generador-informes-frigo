@@ -216,6 +216,24 @@ with st.sidebar:
             for p in finalizados: boton_pedido(p, "🔒")
                 
     st.divider()
+    
+    # 🔥 NUEVA SECCIÓN: ELIMINAR PEDIDO ACTUAL
+    if pedido_actual:
+        st.markdown("### ⚠️ Zona de Peligro")
+        with st.expander("🗑️ Eliminar Pedido Actual"):
+            st.warning(f"¿Estás seguro de que deseas eliminar el pedido **{st.session_state['cargar_ultimo'].get('nro_pedido', '')}**?")
+            st.write("Esta acción borrará el pedido y **TODAS** sus fotos de la nube. No se puede deshacer.")
+            if st.button("Sí, eliminar pedido definitivamente", type="primary", width="stretch"):
+                with st.spinner("Eliminando pedido y fotos..."):
+                    nube.borrar_pedido_nube(pedido_actual)
+                    st.session_state["pedido_actual_id"] = ""
+                    st.session_state["cargar_ultimo"] = {}
+                    st.session_state["reinicio_count"] += 1
+                    st.success("✅ Pedido eliminado correctamente.")
+                    time.sleep(1.5)
+                    st.rerun()
+
+    st.divider()
     if st.button("🧹 Reiniciar app", width="stretch"):
         st.session_state.clear()
         st.rerun()
