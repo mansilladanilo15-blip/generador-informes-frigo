@@ -79,11 +79,35 @@ def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
 
     return supabase.storage.from_("fotos").get_public_url(ruta_nube)
 
-def obtener_fotos_nube(pedido_id):
+def obtener_fotos_nube_verificado(pedido_id):
+    """Lista fotos y propaga errores: [] significa que la carpeta está vacía.
+
+    Esta función se usa en operaciones críticas (por ejemplo, confirmar borrados).
+    No convierte errores de red/permisos en una lista vacía.
+    """
     supabase = obtener_cliente()
+    archivos = supabase.storage.from_("fotos").list(pedido_id)
+    if archivos is None:
+        raise RuntimeError("Supabase no devolvió una lista de fotos válida.")
+
+    extensiones_validas = (".jpg", ".jpeg", ".png")
+    return [
+        archivo["name"]
+        for archivo in archivos
+        if isinstance(archivo, dict)
+        and isinstance(archivo.get("name"), str)
+        and archivo["name"].lower().endswith(extensiones_validas)
+    ]
+
+
+def obtener_fotos_nube(pedido_id):
+    """Lista fotos para las galerías, conservando compatibilidad con la app actual.
+
+    En caso de error devuelve [], como hacía la versión anterior. Para borrados
+    y comprobaciones críticas, usar obtener_fotos_nube_verificado().
+    """
     try:
-        archivos = supabase.storage.from_("fotos").list(pedido_id)
-        return [a['name'] for a in archivos if a['name'].endswith(('.jpg', '.jpeg', '.png'))]
+        return obtener_fotos_nube_verificado(pedido_id)
     except Exception:
         return []
 
@@ -94,6 +118,7 @@ def descargar_foto_nube(pedido_id, nombre_archivo):
     return bytes(resultado)
 
 def borrar_foto_nube(pedido_id, nombre_archivo):
+    """Solicita el borrado remoto y propaga los errores de Supabase al llamador."""
     supabase = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
-    supabase.storage.from_("fotos").remove([ruta_nube])
+    return supabase.storage.from_("fotos").remove([ruta_nube])
