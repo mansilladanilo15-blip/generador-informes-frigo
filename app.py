@@ -396,7 +396,59 @@ if pedido_actual:
                     "Pata Final (Editable)": pata_guardada,
                     "Cajas": cajas_guardadas
                 })
-                
+        if estibas:
+            st.markdown("### 📋 Resumen de Patas y Cajas")
+            
+            # 🔥 BOTÓN PARA PROCESAR FOTOS QUE VIENEN DEL CELULAR CON PATA 99
+            if not bloqueado:
+                fotos_99 = [f for f in estibas if "99" in f]
+                if fotos_99:
+                    st.warning(f"⚠️ Hay {len(fotos_99)} fotos subidas desde el celular que no tienen pata asignada (Pata 99).")
+                    if st.button("🔍 Procesar OCR a fotos pendientes (Pata 99)", type="primary", width="stretch"):
+                        with st.spinner("El OCR está analizando las fotos nuevas..."):
+                            from ocr_bridge import analizar_fotos
+                            
+                            pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_actual), {})
+                            if "cajas_estibas" not in pedido_data: pedido_data["cajas_estibas"] = {}
+                            if "patas_estibas" not in pedido_data: pedido_data["patas_estibas"] = {}
+
+                            for f in fotos_99:
+                                # Descargamos la foto de la nube
+                                bytes_foto = nube.descargar_foto_nube(pedido_actual, f)
+                                resultados = analizar_fotos([(f, bytes_foto)])
+                                
+                                for r in resultados:
+                                    pata_detectada = r.get("pata")
+                                    cajas_detectadas = r.get("total_cajas", 0)
+                                    
+                                    if pata_detectada and pata_detectada != 99:
+                                        nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
+                                        if nuevo_nombre in fotos:
+                                            nuevo_nombre = f"estiba_pata_{pata_detectada}_REVISAR.jpg"
+                                        
+                                        # Guardamos la foto renombrada y borramos la 99 original
+                                        nube.subir_foto_nube(pedido_actual, nuevo_nombre, bytes_foto)
+                                        nube.borrar_foto_nube(pedido_actual, f)
+                                        
+                                        pedido_data["cajas_estibas"][nuevo_nombre] = cajas_detectadas
+                                        pedido_data["patas_estibas"][nuevo_nombre] = pata_detectada
+                                        
+                                        if f in pedido_data["cajas_estibas"]: del pedido_data["cajas_estibas"][f]
+                                        if f in pedido_data["patas_estibas"]: del pedido_data["patas_estibas"][f]
+                            
+                            nube.subir_pedido_nube(pedido_actual, pedido_data)
+                            st.success("✅ Fotos procesadas y patas asignadas correctamente.")
+                            st.session_state["reinicio_count"] += 1
+                            time.sleep(1.5)
+                            st.rerun()
+
+            # Aquí sigue tu código normal de la tabla...
+            pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_actual), {})
+            cajas_nube = pedido_data.get("cajas_estibas", {})
+            patas_nube = pedido_data.get("patas_estibas", {})
+            
+            # ... resto del código que arma df_editado ...
+            
             df_editado = pd.DataFrame(datos_tabla)
             
             if not df_editado.empty:
