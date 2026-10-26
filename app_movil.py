@@ -72,7 +72,6 @@ if pedido:
 
     pedido_id = pedido['id']
 
-    # 🔥 LEEMOS LOS DATOS DEL PEDIDO DESDE SUPABASE (Para sincronizar patas y cajas)
     pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
     cajas_nube = pedido_data.get("cajas_estibas", {})
     patas_nube = pedido_data.get("patas_estibas", {})
@@ -86,17 +85,29 @@ if pedido:
         with tab1:
             subidas = st.file_uploader("Subir documentación", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_doc_{pedido_id}")
             if subidas:
-                for foto in subidas:
+                # 🔥 BARRA DE PROGRESO
+                progreso = st.progress(0)
+                texto_prog = st.empty()
+                total = len(subidas)
+                
+                for idx, foto in enumerate(subidas):
                     if f"{pedido_id}_doc_{foto.name}" not in st.session_state["procesados"]:
+                        texto_prog.info(f"⏳ Subiendo {idx + 1} de {total}: {foto.name}")
                         nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
                         nube.subir_foto_nube(pedido_id, nombre, foto.getbuffer())
                         st.session_state["procesados"][f"{pedido_id}_doc_{foto.name}"] = True
+                    progreso.progress((idx + 1) / total)
+                
+                texto_prog.empty()
+                progreso.empty()
+                st.toast("✅ Documentación subida")
                 st.rerun()
         with tab2:
             cam = st.camera_input("Tomar foto", key=f"cam_doc_{pedido_id}_{uuid.uuid4().hex[:6]}")
             if cam:
                 nombre = f"documentacion_{uuid.uuid4().hex[:6]}.jpg"
                 nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
+                st.toast("✅ Foto guardada")
                 st.rerun()
                 
         if fotos_doc:
@@ -127,21 +138,28 @@ if pedido:
 
     with st.expander(f"📦 1. Estibas ({len(fotos_estibas)})", expanded=st.session_state["expand_estibas"]):
         
-        # 🔥 SUBIDA MÚLTIPLE PARA ESTIBAS
         st.info("Sube todas las fotos de una vez. El administrador en la PC se encargará de asignar las patas.")
         tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
         
         with tab1:
             subidas = st.file_uploader("Selecciona varias fotos", type=["jpg", "png"], accept_multiple_files=True, key="gal_estibas_multi")
             if subidas:
-                # Procesar en lote
-                for foto in subidas:
+                # 🔥 BARRA DE PROGRESO
+                progreso = st.progress(0)
+                texto_prog = st.empty()
+                total = len(subidas)
+                
+                for idx, foto in enumerate(subidas):
                     file_id = f"{pedido_id}_estiba_{foto.name}_{foto.size}"
                     if file_id not in st.session_state["procesados"]:
-                        # Se guardan con el nombre por defecto para que el admin las asigne en la PC
+                        texto_prog.info(f"⏳ Subiendo {idx + 1} de {total}: {foto.name}")
                         nombre = f"estiba_pata_99_REVISAR_{uuid.uuid4().hex[:4]}.jpg"
                         nube.subir_foto_nube(pedido_id, nombre, foto.getbuffer())
                         st.session_state["procesados"][file_id] = True
+                    progreso.progress((idx + 1) / total)
+                
+                texto_prog.empty()
+                progreso.empty()
                 st.toast("✅ Fotos subidas. Ve a la PC para asignar las patas.")
                 st.rerun()
                 
@@ -155,7 +173,6 @@ if pedido:
 
         st.divider()
 
-        # GALERÍA
         if fotos_estibas:
             cols = st.columns(2)
             for idx, f in enumerate(fotos_estibas):
@@ -163,7 +180,6 @@ if pedido:
                     bytes_img = nube.descargar_foto_nube(pedido_id, f)
                     b64 = base64.b64encode(bytes_img).decode("utf-8")
                     
-                    # 🔥 LEER LA PATA Y CAJAS DESDE EL JSON DE SUPABASE (No del nombre del archivo)
                     pata_asignada = patas_nube.get(f, f.split("_")[2].replace(".jpg", "").split("_")[0])
                     cajas = cajas_nube.get(f, 0)
                     
@@ -210,18 +226,30 @@ if pedido:
             with tab1:
                 subidas = st.file_uploader("Subir fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"gal_{prefijo}")
                 if subidas:
-                    for s in subidas:
+                    # 🔥 BARRA DE PROGRESO
+                    progreso = st.progress(0)
+                    texto_prog = st.empty()
+                    total = len(subidas)
+                    
+                    for idx, s in enumerate(subidas):
                         file_id = f"{pedido_id}_{prefijo}_{s.name}_{s.size}"
                         if file_id not in st.session_state["procesados"]:
+                            texto_prog.info(f"⏳ Subiendo {idx + 1} de {total}: {s.name}")
                             nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
                             nube.subir_foto_nube(pedido_id, nombre, s.getbuffer())
                             st.session_state["procesados"][file_id] = True
+                        progreso.progress((idx + 1) / total)
+                    
+                    texto_prog.empty()
+                    progreso.empty()
+                    st.toast("✅ Fotos subidas")
                     st.rerun()
             with tab2:
                 cam = st.camera_input("Tomar foto", key=f"cam_{prefijo}_{uuid.uuid4().hex[:6]}")
                 if cam:
                     nombre = f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
                     nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
+                    st.toast("✅ Foto guardada")
                     st.rerun()
 
     mostrar_categoria("2. Fotos Camión", "camion_")
