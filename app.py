@@ -301,7 +301,6 @@ if pedido_actual:
             
             if fotos_manuales:
                 if st.button("🚀 Analizar y Guardar Fotos", type="primary", width="stretch"):
-                    
                     progreso = st.progress(0)
                     texto_progreso = st.empty()
                     
@@ -311,9 +310,13 @@ if pedido_actual:
                     errores = []
                     omitidas = 0
                     
+                    # 🔥 Cargamos los datos actuales del pedido para actualizarlos
+                    pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_actual), {})
+                    if "cajas_estibas" not in pedido_data:
+                        pedido_data["cajas_estibas"] = {}
+                    
                     for idx, foto in enumerate(fotos_manuales):
                         texto_progreso.info(f"⏳ Procesando foto {idx + 1} de {total_fotos}: {foto.name}")
-                        
                         resultados = analizar_fotos([(foto.name, foto.getvalue())])
                         
                         for r in resultados:
@@ -322,31 +325,30 @@ if pedido_actual:
                             
                             if pata_detectada and pata_detectada != 99:
                                 nuevo_nombre = f"estiba_pata_{pata_detectada}.jpg"
-                                
                                 if nuevo_nombre in fotos:
                                     nuevo_nombre = f"estiba_pata_{pata_detectada}_REVISAR.jpg"
                                     omitidas += 1
                                 
                                 nube.subir_foto_nube(pedido_actual, nuevo_nombre, foto.getvalue())
-                                st.session_state["cajas_temporales"][nuevo_nombre] = cajas_detectadas
+                                pedido_data["cajas_estibas"][nuevo_nombre] = cajas_detectadas
                                 patas_guardadas += 1
                             else:
                                 nuevo_nombre = f"estiba_pata_99_REVISAR.jpg"
                                 nube.subir_foto_nube(pedido_actual, nuevo_nombre, foto.getvalue())
+                                pedido_data["cajas_estibas"][nuevo_nombre] = cajas_detectadas
                                 errores.append(foto.name)
                         
                         progreso.progress((idx + 1) / total_fotos)
                     
+                    # Guardamos las cajas en la nube
+                    nube.subir_pedido_nube(pedido_actual, pedido_data)
                     texto_progreso.empty()
                     progreso.empty()
                     
                     if errores:
-                        st.warning(f"⚠️ Se procesaron {patas_guardadas} fotos. Las siguientes no se pudieron asignar (se guardaron como Pata 99): {', '.join(errores)}")
+                        st.warning(f"⚠️ Se procesaron {patas_guardadas} fotos. Fotos sin pata: {', '.join(errores)}")
                     else:
                         st.success(f"✅ Se procesaron y guardaron {patas_guardadas} fotos correctamente.")
-                    
-                    if omitidas > 0:
-                        st.info(f"ℹ️ {omitidas} fotos chocaron con una Pata existente. Se guardaron con el sufijo '_REVISAR' para que las revises manualmente.")
                     
                     st.session_state["reinicio_count"] += 1
                     time.sleep(3)
@@ -357,14 +359,17 @@ if pedido_actual:
         if estibas:
             st.markdown("### 📋 Resumen de Patas y Cajas")
             
+            # 🔥 Leemos los datos desde el JSON de Supabase
+            pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_actual), {})
+            cajas_nube = pedido_data.get("cajas_estibas", {})
+
             datos_tabla = []
             for f in estibas:
-                pata_num = f.split("_")[2].replace(".jpg", "")
-                cajas_guardadas = st.session_state["cajas_temporales"].get(f, 0)
+                pata_num = f.split("_")[2].replace(".jpg", "").split("_")[0]
+                cajas_guardadas = cajas_nube.get(f, 0)
                 
                 datos_tabla.append({
                     "Archivo": f,
-                    "Pata OCR": int(pata_num) if pata_num.isdigit() else 0,
                     "Pata Final (Editable)": int(pata_num) if pata_num.isdigit() else 0,
                     "Cajas": cajas_guardadas
                 })
@@ -372,76 +377,54 @@ if pedido_actual:
             df_editado = pd.DataFrame(datos_tabla)
             
             if not df_editado.empty:
-                # 🔥 GUARDAMOS EL ESTADO ACTUAL EN MEMORIA ANTES DE EDITAR
-                if f"editor_state_{pedido_actual}" not in st.session_state:
-                    st.session_state[f"editor_state_{pedido_actual}"] = df_editado
-
                 df_editado_nuevo = st.data_editor(
-                    st.session_state[f"editor_state_{pedido_actual}"],
+                    df_editado,
                     width="stretch",
                     disabled=bloqueado,
                     hide_index=True,
                     num_rows="fixed",
-                    key=f"editor_estibas_{pedido_actual}_{RC}",
+                    key=f"editor_estibas_{pedido_actual}",
                     column_config={
                         "Archivo": st.column_config.TextColumn("Archivo", disabled=True),
-                        "Pata OCR": st.column_config.NumberColumn("Pata OCR", disabled=True),
                         "Pata Final (Editable)": st.column_config.NumberColumn("Pata Final"),
                         "Cajas": st.column_config.NumberColumn("Cajas")
                     }
                 )
-                
-                # Actualizamos la memoria con lo que el usuario acaba de escribir
-                st.session_state[f"editor_state_{pedido_actual}"] = df_editado_nuevo
 
                 if not bloqueado:
-                    if st.button("💾 Guardar y Sincronizar Cambios", type="primary", width="stretch"):
-                        with st.spinner("Sincronizando..."):
-                            cambios = False
+                    if st.button("💾 Guardar Cambios en Tabla", type="primary", width="stretch"):
+                        with st.spinner("Guardando cambios..."):
+                            # 🔥 Guardamos los valores editados en el JSON del pedido en Supabase
+                            nuevas_cajas = {}
                             for index, row in df_editado_nuevo.iterrows():
-                                archivo_actual = row["Archivo"]
-                                pata_final = int(row["Pata Final (Editable)"])
-                                
-                                pata_original = archivo_actual.split("_")[2].replace(".jpg", "").replace("_REVISAR", "")
-                                try:
-                                    pata_original = int(pata_original)
-                                except:
-                                    pata_original = 0
-                                
-                                if pata_original != pata_final:
-                                    nuevo_nombre = f"estiba_pata_{pata_final}.jpg"
-                                    if nuevo_nombre in fotos:
-                                        nuevo_nombre = f"estiba_pata_{pata_final}_REVISAR.jpg"
-                                    
-                                    bytes_foto = nube.descargar_foto_nube(pedido_actual, archivo_actual)
-                                    nube.subir_foto_nube(pedido_actual, nuevo_nombre, bytes_foto)
-                                    nube.borrar_foto_nube(pedido_actual, archivo_actual)
-                                    cambios = True
+                                nuevas_cajas[row["Archivo"]] = int(row["Cajas"])
                             
-                            if cambios:
-                                st.success("✅ Cambios guardados y sincronizados con la App Móvil.")
-                                if f"editor_state_{pedido_actual}" in st.session_state:
-                                    del st.session_state[f"editor_state_{pedido_actual}"]
-                                st.session_state["reinicio_count"] += 1
-                                time.sleep(2)
-                                st.rerun()
-                            else:
-                                st.info("No hubo cambios de número de pata para sincronizar.")
+                            pedido_data["cajas_estibas"] = nuevas_cajas
+                            nube.subir_pedido_nube(pedido_actual, pedido_data)
+                            
+                            st.success("✅ Cambios guardados correctamente en la nube.")
+                            time.sleep(1.5)
+                            st.rerun()
 
                     filas_seleccionadas = st.multiselect(
                         "Selecciona las fotos que deseas eliminar (puedes elegir varias):",
                         options=range(len(df_editado_nuevo)),
                         format_func=lambda i: f"Pata {df_editado_nuevo.iloc[i]['Pata Final (Editable)']} - {df_editado_nuevo.iloc[i]['Archivo']}",
-                        key=f"sel_borrar_estibas_{pedido_actual}_{RC}"
+                        key=f"sel_borrar_estibas_{pedido_actual}"
                     )
                     
                     if filas_seleccionadas:
                         if st.button("🗑️ Eliminar Fotos Seleccionadas", type="primary", width="stretch"):
                             with st.spinner("Borrando fotos..."):
-                                cant = borrar_fotos_seleccionadas(pedido_actual, df_editado_nuevo, filas_seleccionadas)
-                                st.success(f"✅ {cant} fotos eliminadas correctamente.")
-                                if f"editor_state_{pedido_actual}" in st.session_state:
-                                    del st.session_state[f"editor_state_{pedido_actual}"]
+                                nombres_a_borrar = [df_editado_nuevo.iloc[idx]["Archivo"] for idx in filas_seleccionadas]
+                                for f in nombres_a_borrar:
+                                    nube.borrar_foto_nube(pedido_actual, f)
+                                    st.session_state["fotos_ocultas"].add(f)
+                                    if f in pedido_data["cajas_estibas"]:
+                                        del pedido_data["cajas_estibas"][f]
+                                
+                                nube.subir_pedido_nube(pedido_actual, pedido_data)
+                                st.success(f"✅ {len(nombres_a_borrar)} fotos eliminadas correctamente.")
                                 st.session_state["reinicio_count"] += 1 
                                 time.sleep(1)
                                 st.rerun()
@@ -466,9 +449,7 @@ if pedido_actual:
                         b64 = convertir_a_base64(b, 600)
                         st.markdown(f'<img src="{b64}" style="width:100%; border-radius:8px;">', unsafe_allow_html=True)
                 with col_tabla:
-                    st.info("Edita la Pata y presiona 'Guardar y Sincronizar' para actualizar la App Móvil.")
-            else:
-                st.info("No hay fotos para mostrar.")
+                    st.info("Edita la Pata y las Cajas en la tabla y presiona 'Guardar Cambios en Tabla'.")
 
     def seccion_extra(titulo, prefijo):
         with st.expander(titulo, expanded=False):
