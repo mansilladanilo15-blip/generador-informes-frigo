@@ -346,15 +346,15 @@ if pedido_actual:
                     texto_progreso.empty()
                     progreso.empty()
                     
-                    mensaje = f"✅ Se guardaron {patas_guardadas} fotos nuevas."
-                    if omitidas > 0:
-                        mensaje += f" Se omitieron {omitidas} fotos porque ya existían."
+                            if errores:
+                                st.warning(f"⚠️ Se procesaron {patas_guardadas} fotos con pata válida. Las siguientes fotos no se pudieron asignar (se guardaron como Pata 99): {', '.join(errores)}")
+                            else:
+                                st.success(f"✅ Se procesaron y guardaron {patas_guardadas} fotos correctamente.")
+                            
+                            if omitidas > 0:
+                                st.info(f"ℹ️ Se omitieron {omitidas} fotos porque detectaron una Pata que ya existía en el pedido (para evitar duplicados).")
                     
-                    if errores:
-                        st.warning(f"⚠️ {mensaje} Fotos sin pata: {', '.join(errores)}")
-                    else:
-                        st.success(mensaje)
-                    
+                    # 🔥 LIMPIAR EL CARGADOR Y RECARGAR
                     st.session_state["reinicio_count"] += 1
                     time.sleep(3)
                     st.rerun()
