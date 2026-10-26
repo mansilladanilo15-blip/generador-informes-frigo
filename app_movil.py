@@ -139,66 +139,68 @@ if pedido:
     fotos_estibas = nube.obtener_fotos_nube(pedido_id)
     fotos_estibas = [f for f in fotos_estibas if f.startswith("estiba_pata_") and f not in st.session_state["fotos_ocultas_movil"]]
     
-    # 🔥 CORRECCIÓN DE PATAS FANTASMA:
-    # En lugar de contar las fotos y sumar 1, buscamos cuál es el número de pata más alto
-    # y le sumamos 1 solo a ese, para que no se creen huecos vacíos en el medio.
-    patas_numeros = []
-    for f in fotos_estibas:
-        try:
-            num = int(f.split("_")[2].replace(".jpg", "").split("_")[0])
-            patas_numeros.append(num)
-        except:
-            pass
-    
-    max_pata = max(patas_numeros) if patas_numeros else 0
-    cantidad_patas = max_pata + 1
+    # Leemos el JSON del pedido para saber a qué pata fue asignada cada foto
+    pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
+    cajas_nube = pedido_data.get("cajas_estibas", {})
     
     if "expand_estibas" not in st.session_state:
         st.session_state["expand_estibas"] = True
 
     with st.expander(f"📦 1. Estibas ({len(fotos_estibas)})", expanded=st.session_state["expand_estibas"]):
-        for i in range(1, cantidad_patas + 1):
-            # Buscamos si existe alguna foto que empiece con estiba_pata_i
-            foto_pata = next((f for f in fotos_estibas if f.startswith(f"estiba_pata_{i}.jpg") or f.startswith(f"estiba_pata_{i}_")), None)
-            
-            with st.container(border=True):
-                st.markdown(f"#### 📦 Pata {i}")
-                
-                if foto_pata:
-                    bytes_img = nube.descargar_foto_nube(pedido_id, foto_pata)
-                    st.success("✅ Foto registrada")
-                    
+        if fotos_estibas:
+            # 🔥 GRILLA SIMÉTRICA DE 2 COLUMNAS (Para que se vea ordenado)
+            cols = st.columns(2)
+            for idx, f in enumerate(fotos_estibas):
+                with cols[idx % 2]:
+                    bytes_img = nube.descargar_foto_nube(pedido_id, f)
                     b64 = base64.b64encode(bytes_img).decode("utf-8")
-                    st.markdown(f'<div style="text-align:center;"><img src="data:image/jpeg;base64,{b64}" style="width:100%; border-radius:6px; margin-bottom:8px;"><div style="font-size:12px; color:#666;">{foto_pata}</div></div>', unsafe_allow_html=True)
                     
-                    if st.button(f"🗑️ Borrar Pata {i}", key=f"del_foto_{i}", width="stretch"):
-                        nube.borrar_foto_nube(pedido_id, foto_pata)
-                        st.session_state["fotos_ocultas_movil"].add(foto_pata)
-                        st.toast(f"🗑️ Pata {i} borrada")
-                        time.sleep(0.5)
-                        st.rerun()
-                else:
-                    tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
-                    with tab1:
-                        subida = st.file_uploader("Subir", type=["jpg", "png"], key=f"gal_pata_{i}")
-                        if subida:
-                            st.session_state["procesando_foto"] = True
-                            nube.subir_foto_nube(pedido_id, f"estiba_pata_{i}.jpg", subida.getbuffer())
-                            st.session_state["expand_estibas"] = True
-                            st.session_state["procesando_foto"] = False
-                            st.toast(f"✅ Pata {i} guardada")
-                            time.sleep(1)
+                    # Mostramos el número de pata que le asignaste en la PC
+                    pata_asignada = f.split("_")[2].replace(".jpg", "").split("_")[0]
+                    cajas = cajas_nube.get(f, 0)
+                    
+                    st.markdown(f'''
+                        <div style="text-align:center; margin-bottom: 5px;">
+                            <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:160px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                            <div style="font-size:12px; color:#1a4d8f; font-weight:bold; margin-top:2px;">📦 Pata {pata_asignada} ({cajas} cajas)</div>
+                        </div>
+                    ''', unsafe_allow_html=True)
+                    
+                    col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
+                    with col_b2:
+                        if st.button("🗑️", key=f"del_estiba_{f}", help="Borrar foto"):
+                            nube.borrar_foto_nube(pedido_id, f)
+                            st.session_state["fotos_ocultas_movil"].add(f)
+                            st.toast("🗑️ Foto borrada")
+                            time.sleep(0.5)
                             st.rerun()
-                    with tab2:
-                        cam = st.camera_input("Tomar foto", key=f"cam_pata_{i}_{uuid.uuid4().hex[:6]}")
-                        if cam:
-                            st.session_state["procesando_foto"] = True
-                            nube.subir_foto_nube(pedido_id, f"estiba_pata_{i}.jpg", cam.getbuffer())
-                            st.session_state["expand_estibas"] = True
-                            st.session_state["procesando_foto"] = False
-                            st.toast(f"✅ Pata {i} guardada")
-                            time.sleep(1)
-                            st.rerun()
+        else:
+            st.info("No hay fotos de estibas subidas.")
+
+        # Formulario para subir nuevas fotos
+        tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
+        with tab1:
+            subida = st.file_uploader("Subir nueva estiba", type=["jpg", "png"], key="gal_estiba")
+            if subida:
+                st.session_state["procesando_foto"] = True
+                nombre = f"estiba_pata_99_REVISAR.jpg"
+                nube.subir_foto_nube(pedido_id, nombre, subida.getbuffer())
+                st.session_state["expand_estibas"] = True
+                st.session_state["procesando_foto"] = False
+                st.toast("✅ Estiba guardada, pendiente de revisión en PC.")
+                time.sleep(1)
+                st.rerun()
+        with tab2:
+            cam = st.camera_input("Tomar foto", key="cam_estiba")
+            if cam:
+                st.session_state["procesando_foto"] = True
+                nombre = f"estiba_pata_99_REVISAR.jpg"
+                nube.subir_foto_nube(pedido_id, nombre, cam.getbuffer())
+                st.session_state["expand_estibas"] = True
+                st.session_state["procesando_foto"] = False
+                st.toast("✅ Estiba guardada, pendiente de revisión en PC.")
+                time.sleep(1)
+                st.rerun()
 
         if st.button("➕ Agregar Pata", type="secondary", width="stretch"):
             st.rerun()
