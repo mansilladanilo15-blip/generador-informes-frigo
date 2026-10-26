@@ -389,6 +389,39 @@ if pedido_actual:
                     }
                 )
                 
+                # 🔥 SINCRONIZACIÓN: Si el usuario cambia el número de pata, renombramos la foto en la nube
+                if not bloqueado and st.button("💾 Guardar y Sincronizar Cambios", type="primary", width="stretch"):
+                    with st.spinner("Sincronizando con la App Móvil..."):
+                        cambios = False
+                        for index, row in df_editado.iterrows():
+                            archivo_actual = row["Archivo"]
+                            pata_final = int(row["Pata Final (Editable)"])
+                            
+                            # Extraer el número original del archivo
+                            pata_original = archivo_actual.split("_")[2].replace(".jpg", "").replace("_REVISAR", "")
+                            try:
+                                pata_original = int(pata_original)
+                            except:
+                                pata_original = 0
+                            
+                            if pata_original != pata_final:
+                                nuevo_nombre = f"estiba_pata_{pata_final}.jpg"
+                                if nuevo_nombre in fotos:
+                                    nuevo_nombre = f"estiba_pata_{pata_final}_REVISAR.jpg"
+                                
+                                # Descargar, subir con nuevo nombre y borrar el viejo
+                                bytes_foto = nube.descargar_foto_nube(pedido_actual, archivo_actual)
+                                nube.subir_foto_nube(pedido_actual, nuevo_nombre, bytes_foto)
+                                nube.borrar_foto_nube(pedido_actual, archivo_actual)
+                                cambios = True
+                        
+                        if cambios:
+                            st.success("✅ Cambios guardados. Las fotos se han reasignado en la App Móvil.")
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            st.info("No hubo cambios de número de pata para sincronizar.")
+
                 if not bloqueado:
                     filas_seleccionadas = st.multiselect(
                         "Selecciona las fotos que deseas eliminar (puedes elegir varias):",
@@ -426,9 +459,7 @@ if pedido_actual:
                         b64 = convertir_a_base64(b, 600)
                         st.markdown(f'<img src="{b64}" style="width:100%; border-radius:8px;">', unsafe_allow_html=True)
                 with col_tabla:
-                    st.info("Edita la Pata y las Cajas en la tabla superior. Para borrar fotos equivocadas, selecciónalas en la lista y presiona 'Eliminar'.")
-            else:
-                st.info("No hay fotos para mostrar.")
+                    st.info("Edita la Pata y presiona 'Guardar y Sincronizar' para actualizar el nombre de la foto en la App Móvil.")
 
     def seccion_extra(titulo, prefijo):
         with st.expander(titulo, expanded=False):
