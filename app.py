@@ -13,6 +13,37 @@ from generador import generar_informe
 
 st.set_page_config(page_title="Generador de Informes", page_icon="📄", layout="wide")
 
+# CONTROL DE ACCESO: esta aplicación es exclusiva para administración.
+# La contraseña debe configurarse en Streamlit Community Cloud > Settings > Secrets.
+import hmac
+
+try:
+    _ADMIN_PASSWORD_CONFIGURADA = str(st.secrets.get("ADMIN_PASSWORD", ""))
+except Exception:
+    _ADMIN_PASSWORD_CONFIGURADA = ""
+
+if not _ADMIN_PASSWORD_CONFIGURADA:
+    st.error("🔐 Falta configurar ADMIN_PASSWORD en los Secrets de Streamlit. La aplicación está bloqueada por seguridad.")
+    st.stop()
+
+if not st.session_state.get("admin_autenticado", False):
+    st.title("🔐 Acceso de administración")
+    st.caption("Ingresa la contraseña administrativa para abrir el generador de informes.")
+    with st.form("form_acceso_admin", clear_on_submit=True):
+        _password_ingresada = st.text_input("Contraseña administrativa", type="password")
+        _intento_login = st.form_submit_button("Ingresar", type="primary", use_container_width=True)
+    if _intento_login:
+        if hmac.compare_digest(_password_ingresada, _ADMIN_PASSWORD_CONFIGURADA):
+            st.session_state["admin_autenticado"] = True
+            st.rerun()
+        else:
+            st.error("Contraseña incorrecta.")
+    st.stop()
+
+if st.sidebar.button("🔒 Cerrar sesión administrativa", use_container_width=True):
+    st.session_state.pop("admin_autenticado", None)
+    st.rerun()
+
 if "reinicio_count" not in st.session_state:
     st.session_state["reinicio_count"] = 0
 if "fotos_ocultas" not in st.session_state:
@@ -233,7 +264,7 @@ with st.sidebar:
             st.write("Esta acción borrará el pedido y **TODAS** sus fotos de la nube. No se puede deshacer.")
             if st.button("Sí, eliminar pedido definitivamente", type="primary", width="stretch"):
                 with st.spinner("Eliminando pedido y fotos..."):
-                    nube.borrar_pedido_nube(pedido_actual)
+                    nube.borrar_pedido_nube_admin(pedido_actual)
                     st.session_state["pedido_actual_id"] = ""
                     st.session_state["cargar_ultimo"] = {}
                     st.session_state["reinicio_count"] += 1
