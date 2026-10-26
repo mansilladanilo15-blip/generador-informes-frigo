@@ -82,7 +82,7 @@ if pedido:
     cajas_nube = pedido_data.get("cajas_estibas", {})
     patas_nube = pedido_data.get("patas_estibas", {})
 
-        if fotos_doc:
+    if fotos_doc:
             cols = st.columns(2)
             for idx, f in enumerate(fotos_doc):
                 with cols[idx % 2]:
