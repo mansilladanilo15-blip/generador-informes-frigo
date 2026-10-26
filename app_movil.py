@@ -273,7 +273,7 @@ if pedido:
                 st.session_state["subida_terminada"] = True
                 progreso.empty()
                 texto_prog.empty()
-                st.success("✅ Fotos subidas correctamente. Ya puedes ir a la PC a procesarlas.")
+                st.success("✅ Fotos subidas correctamente.")
                 st.button("👁️ Ver fotos subidas", on_click=lambda: st.session_state.update({"subida_terminada": False}))
                 
         with tab2:
