@@ -189,17 +189,28 @@ if pedido:
         fotos = [f for f in fotos if f.startswith(prefijo) and f not in st.session_state["fotos_ocultas_movil"]]
         with st.expander(f"{titulo} ({len(fotos)})", expanded=False):
             if fotos:
-                cols = st.columns(3)
+                # 🔥 Grilla simétrica de 2 columnas
+                cols = st.columns(2)
                 for idx, f in enumerate(fotos):
-                    with cols[idx % 3]:
+                    with cols[idx % 2]:
                         bytes_img = nube.descargar_foto_nube(pedido_id, f)
-                        mostrar_imagen_nube(bytes_img, f)
-                        if st.button(f"🗑️ Borrar", key=f"del_{f}", width="stretch"):
-                            nube.borrar_foto_nube(pedido_id, f)
-                            st.session_state["fotos_ocultas_movil"].add(f)
-                            st.toast("🗑️ Foto borrada")
-                            time.sleep(0.5)
-                            st.rerun()
+                        # Hacemos la imagen más alta y con bordes redondeados
+                        b64 = base64.b64encode(bytes_img).decode("utf-8")
+                        st.markdown(f'''
+                            <div style="text-align:center; margin-bottom: 5px;">
+                                <img src="data:image/jpeg;base64,{b64}" style="width:100%; height:200px; object-fit:cover; border-radius:8px; border: 1px solid #ddd;">
+                            </div>
+                        ''', unsafe_allow_html=True)
+                        
+                        # Botón de borrar más pequeño y centrado
+                        col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+                        with col_btn2:
+                            if st.button("🗑️", key=f"del_{f}", help="Borrar foto"):
+                                nube.borrar_foto_nube(pedido_id, f)
+                                st.session_state["fotos_ocultas_movil"].add(f)
+                                st.toast("🗑️ Foto borrada")
+                                time.sleep(0.5)
+                                st.rerun()
             
             tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
             with tab1:
