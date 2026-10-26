@@ -17,8 +17,6 @@ if "reinicio_count" not in st.session_state:
     st.session_state["reinicio_count"] = 0
 if "fotos_ocultas" not in st.session_state:
     st.session_state["fotos_ocultas"] = set()
-if "cajas_temporales" not in st.session_state:
-    st.session_state["cajas_temporales"] = {}
 
 RC = st.session_state["reinicio_count"]
 
@@ -101,11 +99,20 @@ def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
     if not seleccion:
         return 0
     nombres_a_borrar = [df.iloc[idx]["Archivo"] for idx in seleccion]
+    pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
+    cajas_nube = pedido_data.get("cajas_estibas", {})
+    patas_nube = pedido_data.get("patas_estibas", {})
+
     for f in nombres_a_borrar:
         nube.borrar_foto_nube(pedido_id, f)
         st.session_state["fotos_ocultas"].add(f)
-        if f in st.session_state["cajas_temporales"]:
-            del st.session_state["cajas_temporales"][f]
+        if f in cajas_nube: del cajas_nube[f]
+        if f in patas_nube: del patas_nube[f]
+    
+    pedido_data["cajas_estibas"] = cajas_nube
+    pedido_data["patas_estibas"] = patas_nube
+    nube.subir_pedido_nube(pedido_id, pedido_data)
+
     st.cache_data.clear()
     key_multiselect = f"sel_borrar_estibas_{pedido_id}"
     if key_multiselect in st.session_state:
@@ -113,12 +120,15 @@ def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
     return len(nombres_a_borrar)
 
 def borrar_todas_las_estibas(pedido_id, fotos_estibas):
-    """Elimina todas las fotos de estibas (incluyendo duplicados) de la nube."""
+    pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
+    
     for f in fotos_estibas:
         nube.borrar_foto_nube(pedido_id, f)
         st.session_state["fotos_ocultas"].add(f)
-        if f in st.session_state["cajas_temporales"]:
-            del st.session_state["cajas_temporales"][f]
+    
+    pedido_data["cajas_estibas"] = {}
+    pedido_data["patas_estibas"] = {}
+    nube.subir_pedido_nube(pedido_id, pedido_data)
     
     st.cache_data.clear()
     
@@ -204,7 +214,6 @@ with st.sidebar:
                     st.session_state["pedido_actual_id"] = p["id"]
                     st.session_state["reinicio_count"] += 1
                     st.session_state["fotos_ocultas"] = set()
-                    st.session_state["cajas_temporales"] = {}
                     st.rerun()
 
         if pendientes:
@@ -217,7 +226,6 @@ with st.sidebar:
                 
     st.divider()
     
-    # 🔥 NUEVA SECCIÓN: ELIMINAR PEDIDO ACTUAL
     if pedido_actual:
         st.markdown("### ⚠️ Zona de Peligro")
         with st.expander("🗑️ Eliminar Pedido Actual"):
@@ -316,7 +324,6 @@ if pedido_actual:
             st.markdown("### 📤 Subir y Procesar Fotos Nuevas")
             st.info("Sube las fotos de WhatsApp. El OCR les asignará el número de Pata y contará las cajas.")
             
-            # 🔥 El key dinámico con RC evita micro-refrescos al limpiar el cargador
             fotos_manuales = st.file_uploader("Selecciona las fotos", type=["jpg", "png"], accept_multiple_files=True, key=f"up_estiba_{RC}")
             
             if fotos_manuales:
@@ -331,10 +338,8 @@ if pedido_actual:
                     omitidas = 0
                     
                     pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_actual), {})
-                    if "cajas_estibas" not in pedido_data:
-                        pedido_data["cajas_estibas"] = {}
-                    if "patas_estibas" not in pedido_data:
-                        pedido_data["patas_estibas"] = {}
+                    if "cajas_estibas" not in pedido_data: pedido_data["cajas_estibas"] = {}
+                    if "patas_estibas" not in pedido_data: pedido_data["patas_estibas"] = {}
                     
                     for idx, foto in enumerate(fotos_manuales):
                         texto_progreso.info(f"⏳ Procesando foto {idx + 1} de {total_fotos}: {foto.name}")
@@ -395,7 +400,6 @@ if pedido_actual:
                             if "patas_estibas" not in pedido_data: pedido_data["patas_estibas"] = {}
 
                             for f in fotos_99:
-                                # Descargamos la foto de la nube
                                 bytes_foto = nube.descargar_foto_nube(pedido_actual, f)
                                 resultados = analizar_fotos([(f, bytes_foto)])
                                 
@@ -408,7 +412,6 @@ if pedido_actual:
                                         if nuevo_nombre in fotos:
                                             nuevo_nombre = f"estiba_pata_{pata_detectada}_REVISAR.jpg"
                                         
-                                        # Guardamos la foto renombrada y borramos la 99 original
                                         nube.subir_foto_nube(pedido_actual, nuevo_nombre, bytes_foto)
                                         nube.borrar_foto_nube(pedido_actual, f)
                                         
@@ -424,13 +427,23 @@ if pedido_actual:
                             time.sleep(1.5)
                             st.rerun()
 
-            # Aquí sigue tu código normal de la tabla...
+            # 🔥 CONSTRUCCIÓN DE LA TABLA (Aquí estaba el error de la línea 434)
             pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_actual), {})
             cajas_nube = pedido_data.get("cajas_estibas", {})
             patas_nube = pedido_data.get("patas_estibas", {})
             
-            # ... resto del código que arma df_editado ...
-            
+            datos_tabla = []
+            for f in estibas:
+                pata_original = f.split("_")[2].replace(".jpg", "").split("_")[0]
+                pata_guardada = patas_nube.get(f, int(pata_original) if pata_original.isdigit() else 0)
+                cajas_guardadas = cajas_nube.get(f, 0)
+                
+                datos_tabla.append({
+                    "Archivo": f,
+                    "Pata Final (Editable)": pata_guardada,
+                    "Cajas": cajas_guardadas
+                })
+                
             df_editado = pd.DataFrame(datos_tabla)
             
             if not df_editado.empty:
@@ -477,17 +490,8 @@ if pedido_actual:
                     if filas_seleccionadas:
                         if st.button("🗑️ Eliminar Fotos Seleccionadas", type="primary", width="stretch"):
                             with st.spinner("Borrando fotos..."):
-                                nombres_a_borrar = [df_editado_nuevo.iloc[idx]["Archivo"] for idx in filas_seleccionadas]
-                                for f in nombres_a_borrar:
-                                    nube.borrar_foto_nube(pedido_actual, f)
-                                    st.session_state["fotos_ocultas"].add(f)
-                                    if f in pedido_data["cajas_estibas"]:
-                                        del pedido_data["cajas_estibas"][f]
-                                    if f in pedido_data["patas_estibas"]:
-                                        del pedido_data["patas_estibas"][f]
-                                
-                                nube.subir_pedido_nube(pedido_actual, pedido_data)
-                                st.success(f"✅ {len(nombres_a_borrar)} fotos eliminadas correctamente.")
+                                cant = borrar_fotos_seleccionadas(pedido_actual, df_editado_nuevo, filas_seleccionadas)
+                                st.success(f"✅ {cant} fotos eliminadas correctamente.")
                                 st.session_state["reinicio_count"] += 1 
                                 time.sleep(1)
                                 st.rerun()
