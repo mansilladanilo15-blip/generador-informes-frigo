@@ -381,24 +381,6 @@ if pedido_actual:
         if estibas:
             st.markdown("### 📋 Resumen de Patas y Cajas")
             
-            pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_actual), {})
-            cajas_nube = pedido_data.get("cajas_estibas", {})
-            patas_nube = pedido_data.get("patas_estibas", {})
-
-            datos_tabla = []
-            for f in estibas:
-                pata_original = f.split("_")[2].replace(".jpg", "").split("_")[0]
-                pata_guardada = patas_nube.get(f, int(pata_original) if pata_original.isdigit() else 0)
-                cajas_guardadas = cajas_nube.get(f, 0)
-                
-                datos_tabla.append({
-                    "Archivo": f,
-                    "Pata Final (Editable)": pata_guardada,
-                    "Cajas": cajas_guardadas
-                })
-        if estibas:
-            st.markdown("### 📋 Resumen de Patas y Cajas")
-            
             # 🔥 BOTÓN PARA PROCESAR FOTOS QUE VIENEN DEL CELULAR CON PATA 99
             if not bloqueado:
                 fotos_99 = [f for f in estibas if "99" in f]
