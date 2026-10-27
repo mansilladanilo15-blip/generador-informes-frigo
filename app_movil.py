@@ -119,6 +119,8 @@ if "procesados" not in st.session_state:
     st.session_state["procesados"] = {}
 if "confirmar_borrado_movil" not in st.session_state:
     st.session_state["confirmar_borrado_movil"] = False
+if "expand_estibas" not in st.session_state:
+    st.session_state["expand_estibas"] = True
 
 col_titulo, col_boton = st.columns([4, 1])
 with col_titulo:
