@@ -172,12 +172,14 @@ def borrar_todas_las_estibas(pedido_id, fotos_estibas):
 
 def _generar_pdf_pedido(pedido_id):
     """
-    Construye el diccionario de datos que espera generador.generar_informe,
-    descargando todas las fotos desde la nube, y devuelve (pdf_bytes, nombre_archivo).
+    Adapta los datos de la nube a la firma real de generador.generar_informe:
+        generar_informe(datos, fotos_por_categoria, filas_estibas=None) -> Path
+    Devuelve (pdf_bytes, nombre_archivo).
     """
     from generador import generar_informe
+    from pathlib import Path
 
-    # 1. Traer datos del pedido
+    # 1. Datos del pedido
     pedidos = nube.obtener_pedidos_nube() or []
     pedido_data = next(
         (p.copy() for p in pedidos if str(p.get("id")) == str(pedido_id)),
@@ -186,31 +188,88 @@ def _generar_pdf_pedido(pedido_id):
     if pedido_data is None:
         raise RuntimeError("No se encontró el pedido en la nube.")
 
-    # 2. Listar y clasificar fotos
+    # 2. Listar y clasificar fotos por prefijo
     nombres_fotos = list(nube.obtener_fotos_nube(pedido_id) or [])
-    fotos_por_categoria = {
-        "documentacion": [],
-        "camion": [],
-        "termografo": [],
-        "sello": [],
-        "thermoking": [],
-        "estibas": [],
+    prefijos = {
+        "documentacion": "documentacion_",
+        "camion": "camion_",
+        "termografo": "termografo_",
+        "sello": "sello_",
+        "thermoking": "thermoking_",
+        "etiqueta": "etiqueta_",
+        "estibas": "estiba_pata_",
     }
-    for nombre in nombres_fotos:
-        if nombre.startswith("documentacion_"):
-            fotos_por_categoria["documentacion"].append(nombre)
-        elif nombre.startswith("camion_"):
-            fotos_por_categoria["camion"].append(nombre)
-        elif nombre.startswith("termografo_"):
-            fotos_por_categoria["termografo"].append(nombre)
-        elif nombre.startswith("sello_"):
-            fotos_por_categoria["sello"].append(nombre)
-        elif nombre.startswith("thermoking_"):
-            fotos_por_categoria["thermoking"].append(nombre)
-        elif nombre.startswith("estiba_pata_"):
-            fotos_por_categoria["estibas"].append(nombre)
 
-    # 3. Descargar los bytes de cada foto
+    # 3. Descargar bytes de cada foto y armar dicts con "archivo" + "pie"
+    def descargar_categoria(prefijo):
+        resultado = []
+        for nombre in nombres_fotos:
+            if not nombre.startswith(prefijo):
+                continue
+            try:
+                contenido = nube.descargar_foto_nube(pedido_id, nombre)
+            except Exception:
+                continue  # si falla una, se omite sin romper el informe
+            pie = nombre.rsplit(".", 1)[0]
+            resultado.append({"archivo": contenido, "pie": pie})
+        return resultado
+
+    fotos_por_categoria = {
+        "estibas": descargar_categoria(prefijos["estibas"]),
+        "camion": descargar_categoria(prefijos["camion"]),
+        "termografo": descargar_categoria(prefijos["termografo"]),
+        "sello": descargar_categoria(prefijos["sello"]),
+        "thermoking": descargar_categoria(prefijos["thermoking"]),
+        "etiqueta": descargar_categoria(prefijos["etiqueta"]),
+        "documentacion": descargar_categoria(prefijos["documentacion"]),
+    }
+
+    # 4. Filas de estibas: construir_tabla_estibas espera [{"cantidad": int}, ...]
+    cajas_nube = pedido_data.get("cajas_estibas", {}) or {}
+    patas_nube = pedido_data.get("patas_estibas", {}) or {}
+    filas_estibas = []
+    for nombre in nombres_fotos:
+        if not nombre.startswith("estiba_pata_"):
+            continue
+        filas_estibas.append({
+            "pata": int(patas_nube.get(nombre, 0) or 0),
+            "cantidad": int(cajas_nube.get(nombre, 0) or 0),
+        })
+    filas_estibas.sort(key=lambda x: x["pata"])
+
+    # 5. Diccionario de datos que consume la plantilla
+    datos = {
+        "pedido_id": pedido_id,  # por si en el futuro quieres guardar en temp/pedidos/{id}
+        "empresa": pedido_data.get("empresa", "Australis Mar SA"),
+        "tipo_informe": pedido_data.get("tipo", "Pedido de venta"),
+        "nro_pedido": pedido_data.get("nro_pedido", ""),
+        "nro_entrega": pedido_data.get("nro_entrega", "-"),
+        "fecha": pedido_data.get("fecha_creacion", ""),
+        "origen": pedido_data.get("origen", "Planta Dumestre"),
+        "cliente": pedido_data.get("cliente", ""),
+        "guia_despacho": pedido_data.get("guia_despacho", "-"),
+        "transporte": pedido_data.get("transporte", "-"),
+        "chofer": pedido_data.get("chofer", "-"),
+        "patente_camion": pedido_data.get("patente_camion", "-"),
+        "patente_rampla": pedido_data.get("patente_rampla", "-"),
+        "sello_final": pedido_data.get("sello_final", "-"),
+        "sellos_provisorios": pedido_data.get("sellos_provisorios", "-"),
+        "nro_termografo": pedido_data.get("nro_termografo", "-"),
+    }
+
+    # 6. Llamar al generador real
+    ruta_pdf = generar_informe(datos, fotos_por_categoria, filas_estibas)
+
+    # 7. Leer bytes del PDF generado (WeasyPrint escribe en disco)
+    ruta_pdf = Path(ruta_pdf)
+    if not ruta_pdf.exists():
+        raise RuntimeError(f"El generador no creó el archivo PDF: {ruta_pdf}")
+
+    pdf_bytes = ruta_pdf.read_bytes()
+    if not pdf_bytes:
+        raise RuntimeError("El PDF generado está vacío.")
+
+    return pdf_bytes, ruta_pdf.name
     def descargar_lista(lista_nombres):
         salida = []
         for nombre in lista_nombres:
