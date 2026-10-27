@@ -170,6 +170,119 @@ def borrar_todas_las_estibas(pedido_id, fotos_estibas):
             
     return len(fotos_estibas)
 
+def _generar_pdf_pedido(pedido_id):
+    """
+    Construye el diccionario de datos que espera generador.generar_informe,
+    descargando todas las fotos desde la nube, y devuelve (pdf_bytes, nombre_archivo).
+    """
+    from generador import generar_informe
+
+    # 1. Traer datos del pedido
+    pedidos = nube.obtener_pedidos_nube() or []
+    pedido_data = next(
+        (p.copy() for p in pedidos if str(p.get("id")) == str(pedido_id)),
+        None,
+    )
+    if pedido_data is None:
+        raise RuntimeError("No se encontró el pedido en la nube.")
+
+    # 2. Listar y clasificar fotos
+    nombres_fotos = list(nube.obtener_fotos_nube(pedido_id) or [])
+    fotos_por_categoria = {
+        "documentacion": [],
+        "camion": [],
+        "termografo": [],
+        "sello": [],
+        "thermoking": [],
+        "estibas": [],
+    }
+    for nombre in nombres_fotos:
+        if nombre.startswith("documentacion_"):
+            fotos_por_categoria["documentacion"].append(nombre)
+        elif nombre.startswith("camion_"):
+            fotos_por_categoria["camion"].append(nombre)
+        elif nombre.startswith("termografo_"):
+            fotos_por_categoria["termografo"].append(nombre)
+        elif nombre.startswith("sello_"):
+            fotos_por_categoria["sello"].append(nombre)
+        elif nombre.startswith("thermoking_"):
+            fotos_por_categoria["thermoking"].append(nombre)
+        elif nombre.startswith("estiba_pata_"):
+            fotos_por_categoria["estibas"].append(nombre)
+
+    # 3. Descargar los bytes de cada foto
+    def descargar_lista(lista_nombres):
+        salida = []
+        for nombre in lista_nombres:
+            try:
+                salida.append((nombre, nube.descargar_foto_nube(pedido_id, nombre)))
+            except Exception:
+                # Si una foto falla, se omite sin romper el informe
+                continue
+        return salida
+
+    fotos_bytes = {cat: descargar_lista(nombres) for cat, nombres in fotos_por_categoria.items()}
+
+    # 4. Preparar datos de estibas (pata + cajas + bytes)
+    cajas_nube = pedido_data.get("cajas_estibas", {}) or {}
+    patas_nube = pedido_data.get("patas_estibas", {}) or {}
+    estibas_detalle = []
+    for nombre, contenido in fotos_bytes["estibas"]:
+        estibas_detalle.append({
+            "nombre": nombre,
+            "pata": int(patas_nube.get(nombre, 0) or 0),
+            "cajas": int(cajas_nube.get(nombre, 0) or 0),
+            "bytes": contenido,
+        })
+    estibas_detalle.sort(key=lambda x: (x["pata"], x["nombre"]))
+
+    # 5. Ensamblar el payload para el generador
+    #    Ajusta estas claves a lo que realmente espera generador.generar_informe.
+    datos_informe = {
+        # Datos generales del pedido
+        "empresa": pedido_data.get("empresa", "Australis Mar SA"),
+        "tipo_informe": pedido_data.get("tipo", "Pedido de venta"),
+        "nro_pedido": pedido_data.get("nro_pedido", ""),
+        "nro_entrega": pedido_data.get("nro_entrega", "-"),
+        "fecha": pedido_data.get("fecha_creacion", ""),
+        "origen": pedido_data.get("origen", "Planta Dumestre"),
+        "cliente": pedido_data.get("cliente", ""),
+        "guia_despacho": pedido_data.get("guia_despacho", ""),
+        # Transporte
+        "transporte": pedido_data.get("transporte", ""),
+        "chofer": pedido_data.get("chofer", ""),
+        "patente_camion": pedido_data.get("patente_camion", ""),
+        "patente_rampla": pedido_data.get("patente_rampla", ""),
+        "sello_final": pedido_data.get("sello_final", ""),
+        "sellos_provisorios": pedido_data.get("sellos_provisorios", ""),
+        "nro_termografo": pedido_data.get("nro_termografo", ""),
+        # Totales de estibas
+        "total_patas": len(estibas_detalle),
+        "total_cajas": sum(e["cajas"] for e in estibas_detalle),
+        "estibas": estibas_detalle,
+        # Fotos por categoría (nombre, bytes)
+        "fotos_documentacion": fotos_bytes["documentacion"],
+        "fotos_camion": fotos_bytes["camion"],
+        "fotos_termografo": fotos_bytes["termografo"],
+        "fotos_sello": fotos_bytes["sello"],
+        "fotos_thermoking": fotos_bytes["thermoking"],
+    }
+
+    # 6. Llamar al generador
+    resultado = generar_informe(datos_informe)
+
+    # 7. Normalizar la salida: bytes + nombre de archivo
+    if isinstance(resultado, tuple) and len(resultado) == 2:
+        pdf_bytes, nombre_pdf = resultado
+    else:
+        pdf_bytes = resultado
+        nombre_pdf = f"Informe_{pedido_data.get('nro_pedido', 'pedido')}.pdf"
+
+    if not isinstance(pdf_bytes, (bytes, bytearray)) or not pdf_bytes:
+        raise RuntimeError("El generador no devolvió un PDF válido.")
+
+    return bytes(pdf_bytes), nombre_pdf
+
 def mostrar_gestion_pedidos():
     st.subheader("📋 Gestión de Pedidos")
     tipo_pedido = st.radio("Selecciona el tipo:", ["Pedido de venta", "Traslado"], horizontal=True)
@@ -606,7 +719,23 @@ st.divider()
 c1, c2 = st.columns(2)
 with c1:
     if st.button("🚀 Generar PDF", type="primary", width="stretch"):
-        st.success("Función PDF en construcción para la nube.")
+        if not pedido_actual:
+            st.error("Selecciona un pedido antes de generar el informe.")
+        else:
+            with st.spinner("Generando PDF..."):
+                try:
+                    pdf_bytes, nombre_pdf = _generar_pdf_pedido(pedido_actual)
+                    st.success("✅ Informe generado.")
+                    st.download_button(
+                        label="📥 Descargar PDF",
+                        data=pdf_bytes,
+                        file_name=nombre_pdf,
+                        mime="application/pdf",
+                        type="primary",
+                        width="stretch",
+                    )
+                except Exception as exc:
+                    st.error(f"❌ Error al generar el PDF: {exc}")
 with c2:
     if pedido_actual and not bloqueado:
         if st.button("✅ Finalizar Pedido", width="stretch"):
