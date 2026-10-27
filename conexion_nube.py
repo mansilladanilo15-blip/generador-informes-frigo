@@ -10,6 +10,8 @@ import os
 import tempfile
 import time
 import hmac
+from io import BytesIO
+from PIL import Image, ImageOps
 
 import streamlit as st
 from supabase import create_client
@@ -106,27 +108,61 @@ def obtener_fotos_nube_verificado(pedido_id, cliente=None):
 
 
 def obtener_fotos_nube(pedido_id):
-    try:
-        return obtener_fotos_nube_verificado(pedido_id)
-    except Exception:
-        return []
+    """Lista fotos; los errores de conexión se propagan y no se disfrazan como lista vacía."""
+    return obtener_fotos_nube_verificado(pedido_id)
+
+
+def _preparar_foto(nombre_archivo, contenido_bytes):
+    """Normaliza archivos llamados .jpg a JPEG real y define su MIME correcto."""
+    datos = bytes(contenido_bytes)
+    extension = os.path.splitext(nombre_archivo)[1].lower()
+    if extension in (".jpg", ".jpeg"):
+        try:
+            imagen = Image.open(BytesIO(datos))
+            imagen = ImageOps.exif_transpose(imagen)
+            if imagen.mode not in ("RGB",):
+                imagen = imagen.convert("RGB")
+            salida = BytesIO()
+            imagen.save(salida, format="JPEG", quality=94, optimize=True)
+            datos = salida.getvalue()
+        except Exception as exc:
+            raise ValueError(f"El archivo '{nombre_archivo}' no es una imagen válida: {exc}") from exc
+        mime = "image/jpeg"
+    elif extension == ".png":
+        try:
+            imagen = Image.open(BytesIO(datos))
+            imagen.verify()
+        except Exception as exc:
+            raise ValueError(f"El archivo '{nombre_archivo}' no es un PNG válido: {exc}") from exc
+        mime = "image/png"
+    else:
+        raise ValueError("Formato no admitido. Usa JPG, JPEG o PNG.")
+    if not datos:
+        raise ValueError("La fotografía está vacía y no se puede subir.")
+    return datos, mime
 
 
 def subir_foto_nube(pedido_id, nombre_archivo, contenido_bytes):
+    """Sube una foto y confirma que existe en Storage; los fallos se informan al llamador."""
     if not contenido_bytes:
         raise ValueError("La fotografía está vacía y no se puede subir.")
     nombre_archivo = os.path.basename(str(nombre_archivo))
     if not nombre_archivo or nombre_archivo in (".", ".."):
         raise ValueError("El nombre de archivo no es válido.")
+    contenido_preparado, mime = _preparar_foto(nombre_archivo, contenido_bytes)
     cliente = obtener_cliente()
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
     ruta_temporal = None
     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(nombre_archivo)[1] or ".jpg") as tmp:
-        tmp.write(bytes(contenido_bytes))
+        tmp.write(contenido_preparado)
         ruta_temporal = tmp.name
     try:
         with open(ruta_temporal, "rb") as archivo:
-            cliente.storage.from_("fotos").upload(path=ruta_nube, file=archivo, file_options={"content-type": "image/jpeg", "upsert": "true"})
+            cliente.storage.from_("fotos").upload(
+                path=ruta_nube,
+                file=archivo,
+                file_options={"content-type": mime, "upsert": "true"}
+            )
     finally:
         if ruta_temporal and os.path.exists(ruta_temporal):
             os.remove(ruta_temporal)
