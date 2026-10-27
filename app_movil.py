@@ -152,10 +152,52 @@ if pedido:
 
     if st.session_state.get("confirmar_borrado_movil"):
         st.success("✅ Borrado confirmado en la nube.")
+        if st.button("🔄 Actualizar Galería", type="primary", width="stretch"):
             st.session_state["confirmar_borrado_movil"] = False
             st.session_state.clear()
             st.cache_data.clear()
             st.rerun()
+
+    with st.expander("🧨 Zona de Peligro (Borrar todas las fotos)"):
+        st.warning("Esto eliminará TODAS las fotos de este pedido (en la nube y en la PC).")
+        if st.button("🗑️ Borrar TODAS las fotos del pedido", type="primary", width="stretch"):
+            try:
+                with st.spinner("Eliminando todas las fotos del pedido..."):
+                    fotos_actuales = list(nube.obtener_fotos_nube(pedido_id) or [])
+                    errores = []
+                    for nombre_foto in fotos_actuales:
+                        try:
+                            eliminar_foto_verificada(pedido_id, nombre_foto)
+                        except Exception as exc:
+                            errores.append(f"{nombre_foto}: {exc}")
+
+                    if errores:
+                        st.error("No se confirmaron todas las eliminaciones. No se limpiaron los datos de estibas.")
+                        for error in errores:
+                            st.write(f"• {error}")
+                    else:
+                        pedidos_actualizados = nube.obtener_pedidos_nube() or []
+                        pedido_data = next(
+                            (p.copy() for p in pedidos_actualizados
+                             if str(p.get("id")) == str(pedido_id)),
+                            None
+                        )
+                        if pedido_data is None:
+                            raise RuntimeError("No se encontró el pedido para actualizar sus datos.")
+                        pedido_data["cajas_estibas"] = {}
+                        pedido_data["patas_estibas"] = {}
+                        nube.subir_pedido_nube(pedido_id, pedido_data)
+                        st.session_state["confirmar_borrado_movil"] = True
+                        st.session_state["procesados"] = {}
+                        st.session_state["subida_terminada"] = False
+                        st.cache_data.clear()
+                        st.rerun()
+            except Exception as exc:
+                st.error(f"❌ Error al borrar las fotos: {exc}")
+
+    pedido_data = next((p for p in nube.obtener_pedidos_nube() if p['id'] == pedido_id), {})
+    cajas_nube = pedido_data.get("cajas_estibas", {})
+    patas_nube = pedido_data.get("patas_estibas", {})
 
     # 0. DOCUMENTACIÓN
     fotos_doc = nube.obtener_fotos_nube(pedido_id)
