@@ -249,43 +249,65 @@ def construir_grid_fotos(lista_fotos, tamano_foto=1200):
     return html
 
 
+
+from html import escape
+
+
 def construir_tabla_estibas(filas):
     if not filas:
         return ""
 
-    html = '''
+    html = """
     <table class="tabla-estibas">
       <thead>
         <tr>
-          <th style="width:20%;">N°</th>
-          <th style="width:50%;">Producto</th>
-          <th style="width:30%;">Cantidad</th>
+          <th class="col-numero">N°</th>
+          <th class="col-producto">Producto</th>
+          <th class="col-cantidad">Cantidad</th>
         </tr>
       </thead>
       <tbody>
-    '''
+    """
+
     total = 0
-    for i, f in enumerate(filas, start=1):
-        cantidad = f.get("cantidad", "")
-        try:
-            total += int(cantidad)
-        except (ValueError, TypeError):
-            pass
-        html += f'''
+
+    # Ordenar por número de pata real, sin cambiar el dato guardado.
+    filas_ordenadas = sorted(
+        filas,
+        key=lambda fila: int(fila.get("pata", 0) or 0)
+    )
+
+    for fila in filas_ordenadas:
+        pata = int(fila.get("pata", 0) or 0)
+        cantidad = int(fila.get("cantidad", 0) or 0)
+
+        total += cantidad
+
+        etiqueta_pata = (
+            f"PATA {pata} — REVISAR"
+            if pata == 99
+            else f"PATA {pata}"
+        )
+
+        html += f"""
         <tr>
-          <td><strong>{i}</strong></td>
-          <td>PATA</td>
+          <td class="numero-pata">{pata if pata else "—"}</td>
+          <td>{escape(etiqueta_pata)}</td>
           <td>{cantidad}</td>
         </tr>
-        '''
-    html += f'''
-    <tr style="background: #1a4d8f; color: white; font-weight: bold;">
-      <td colspan="2" style="text-align: right; padding-right: 15px; font-size: 11px;">TOTAL CAJAS:</td>
-      <td style="text-align: center; font-size: 12px;">{total}</td>
-    </tr>
-    '''
-    html += '</tbody></table>'
+        """
+
+    html += f"""
+        <tr class="fila-total">
+          <td colspan="2">TOTAL CAJAS:</td>
+          <td>{total}</td>
+        </tr>
+      </tbody>
+    </table>
+    """
+
     return html
+
 
 
 def construir_seccion(titulo, contenido, salto_inicial=False):
