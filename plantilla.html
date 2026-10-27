@@ -3,10 +3,205 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    @page {
-      size: Letter;
-      margin: 2.54cm;
+
+@page {
+    size: Letter;
+    margin: 2.6cm 1.6cm 1.8cm 1.6cm;
+
+    @bottom-left {
+        content: "Australis Mar SA | Informe fotográfico";
+        font-family: Arial, sans-serif;
+        font-size: 8pt;
+        color: #526174;
+        border-top: 1px solid #cbd5e1;
+        padding-top: 5px;
     }
+
+    @bottom-right {
+        content: "Documento N° " string(numero-documento)
+                 " | Página " counter(page) " de " counter(pages);
+        font-family: Arial, sans-serif;
+        font-size: 8pt;
+        color: #526174;
+        border-top: 1px solid #cbd5e1;
+        padding-top: 5px;
+    }
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #243247;
+    font-size: 10pt;
+}
+
+.encabezado-repetido {
+    position: fixed;
+    top: -2.25cm;
+    left: 0;
+    right: 0;
+    height: 1.65cm;
+    border-bottom: 2px solid #1a4d8f;
+    background: white;
+}
+
+.encabezado-repetido .logos {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.encabezado-repetido .logos td {
+    width: 33.33%;
+    vertical-align: middle;
+    border: none;
+    padding: 0;
+}
+
+.encabezado-repetido .logo-izquierdo {
+    text-align: left;
+}
+
+.encabezado-repetido .logo-derecho {
+    text-align: right;
+}
+
+.encabezado-repetido img {
+    max-width: 3.4cm;
+    max-height: 1.15cm;
+    object-fit: contain;
+}
+
+.encabezado-repetido .texto-encabezado {
+    text-align: center;
+    font-size: 8pt;
+    font-weight: bold;
+    color: #1a4d8f;
+}
+
+.titulo-categoria {
+    background: #1a4d8f;
+    color: white;
+    font-weight: bold;
+    font-size: 11pt;
+    padding: 8px 10px;
+    margin: 0 0 12px 0;
+    border-radius: 3px;
+    page-break-after: avoid;
+    break-after: avoid;
+}
+
+.tabla-estibas {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    margin: 0 0 16px 0;
+    font-size: 9pt;
+}
+
+.tabla-estibas th,
+.tabla-estibas td {
+    border: 1px solid #cbd5e1;
+    padding: 6px 8px;
+    text-align: center;
+    vertical-align: middle;
+    overflow-wrap: break-word;
+}
+
+.tabla-estibas th {
+    background: #eaf0f8;
+    color: #1a365d;
+    font-weight: bold;
+}
+
+.tabla-estibas .col-numero {
+    width: 18%;
+}
+
+.tabla-estibas .col-producto {
+    width: 52%;
+}
+
+.tabla-estibas .col-cantidad {
+    width: 30%;
+}
+
+.tabla-estibas .fila-total {
+    background: #1a4d8f;
+    color: white;
+    font-weight: bold;
+}
+
+.tabla-fotos {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 10px 12px;
+    margin: 0 auto 12px auto;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+.tabla-fotos tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+.tabla-fotos td {
+    width: 50%;
+    padding: 5px;
+    text-align: center;
+    vertical-align: top;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+.contenedor-img {
+    width: 100%;
+    height: 7.2cm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.contenedor-img img {
+    display: block;
+    max-width: 100%;
+    max-height: 7.2cm;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    margin: 0 auto;
+}
+
+.pie-foto {
+    text-align: center;
+    font-size: 8pt;
+    color: #526174;
+    overflow-wrap: anywhere;
+    margin-top: 5px;
+}
+
+.salto-pagina {
+    page-break-before: always;
+    break-before: page;
+}
+
+table {
+    page-break-inside: auto;
+}
+
+thead {
+    display: table-header-group;
+}
+
+tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -226,19 +421,23 @@
     }
   </style>
 </head>
-<body>
 
-  <table class="encabezado">
+<div class="encabezado-repetido">
+  <table class="logos">
     <tr>
-      <td class="logo-box-izq">{{logo_izq_html_grande}}</td>
-      <td class="titulo-box">
-        <div class="empresa">{{empresa}}</div>
-        <h1>{{titulo_informe}}</h1>
-        {{nro_doc_html}}
+      <td class="logo-izquierdo">
+        {{logo_izq_html_grande}}
       </td>
-      <td class="logo-box-der">{{logo_der_html_grande}}</td>
+      <td class="texto-encabezado">
+        AUSTRALIS MAR SA
+      </td>
+      <td class="logo-derecho">
+        {{logo_der_html_grande}}
+      </td>
     </tr>
   </table>
+</div>
+
 
   <div class="banda-estado">
     <span class="etiqueta">FECHA:</span> {{fecha}}
