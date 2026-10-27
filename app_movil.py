@@ -255,7 +255,6 @@ if pedido:
 
     with st.expander(f"📦 1. Estibas ({len(fotos_estibas)})", expanded=st.session_state["expand_estibas"]):
         
-        st.info("Sube todas las fotos de una vez. El administrador en la PC procesará el OCR.")
         tab1, tab2 = st.tabs(["🖼️ Galería", "📷 Cámara"])
         
         with tab1:
