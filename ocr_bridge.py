@@ -1,3 +1,35 @@
+"""OCR de estibas optimizado para CPU.
+
+Mantiene la misma estructura de salida de analizar_fotos() para ser compatible
+con la aplicación de PC. Admite un callback opcional de progreso.
+"""
+import os
+import re
+import threading
+from io import BytesIO
+
+# Limitar hilos evita sobrecarga en despliegues pequeños; se permiten 2 hilos
+# de CPU y un lote de reconocimiento mayor que 1.
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+
+from PIL import Image, ImageOps
+import numpy as np
+
+_ocr_local = threading.local()
+error_ocr = None
+
+try:
+    from paddleocr import PaddleOCR
+    import paddle
+    paddle.set_device("cpu")
+
+    def obtener_ocr():
+        """Inicializa PaddleOCR una sola vez por hilo y reutiliza el modelo."""
+        if not hasattr(_ocr_local, "model"):
+            _ocr_local.model = PaddleOCR(
+                lang="es",
                 use_textline_orientation=True,
                 enable_mkldnn=False,
                 cpu_threads=2,
