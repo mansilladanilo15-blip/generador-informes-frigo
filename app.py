@@ -290,7 +290,7 @@ def _generar_pdf_pedido(pedido_id):
         "tipo_informe": pedido_data.get("tipo", "Pedido de venta"),
         "nro_pedido": pedido_data.get("nro_pedido", ""),
         "nro_entrega": pedido_data.get("nro_entrega", "-"),
-        "fecha": pedido_data.get("fecha_creacion", ""),
+        "fecha": pedido_data.get("fecha") or pedido_data.get("fecha_creacion", ""),
         "origen": pedido_data.get("origen", "Planta Dumestre"),
         "cliente": pedido_data.get("cliente", ""),
         "guia_despacho": pedido_data.get("guia_despacho", "-"),
@@ -349,7 +349,7 @@ def _generar_pdf_pedido(pedido_id):
         "tipo_informe": pedido_data.get("tipo", "Pedido de venta"),
         "nro_pedido": pedido_data.get("nro_pedido", ""),
         "nro_entrega": pedido_data.get("nro_entrega", "-"),
-        "fecha": pedido_data.get("fecha_creacion", ""),
+        "fecha": pedido_data.get("fecha") or pedido_data.get("fecha_creacion", ""),
         "origen": pedido_data.get("origen", "Planta Dumestre"),
         "cliente": pedido_data.get("cliente", ""),
         "guia_despacho": pedido_data.get("guia_despacho", ""),
@@ -416,9 +416,9 @@ def mostrar_gestion_pedidos():
             codigo_pedido = f"{nuevo_nro}_{uuid.uuid4().hex[:4]}"
 
             if tipo_pedido == "Traslado":
-                datos = {"id": pedido_id, "codigo_pedido": codigo_pedido, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro, "cliente": nuevo_destino, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
+                datos = {"id": pedido_id, "codigo_pedido": codigo_pedido, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro, "cliente": nuevo_destino, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha": datetime.now().strftime("%Y-%m-%d"), "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
             else:
-                datos = {"id": pedido_id, "codigo_pedido": codigo_pedido, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro_entrega or "-", "cliente": nuevo_cliente, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
+                datos = {"id": pedido_id, "codigo_pedido": codigo_pedido, "nro_pedido": nuevo_nro, "nro_entrega": nuevo_nro_entrega or "-", "cliente": nuevo_cliente, "tipo": tipo_pedido, "transporte": nuevo_transporte or "No asignado", "estado": "Pendiente de fotos", "fecha": datetime.now().strftime("%Y-%m-%d"), "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M"), "guia_despacho": "-", "chofer": "-", "patente_camion": "-", "patente_rampla": "-", "sello_final": "-", "sellos_provisorios": "-", "nro_termografo": "-"}
 
             nube.subir_pedido_nube(pedido_id, datos)
             st.success("✅ Pedido creado.")
@@ -499,6 +499,16 @@ with st.sidebar:
 st.subheader("📋 Datos generales")
 if bloqueado: st.warning("🔒 Pedido FINALIZADO.")
 
+fecha_guardada = val("fecha", date.today().isoformat())
+try:
+    fecha_inicial = (
+        fecha_guardada
+        if isinstance(fecha_guardada, date)
+        else date.fromisoformat(str(fecha_guardada)[:10])
+    )
+except (TypeError, ValueError):
+    fecha_inicial = date.today()
+
 with st.form("datos"):
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -506,7 +516,7 @@ with st.form("datos"):
         tipo_informe = st.selectbox("Tipo", ["Pedido de venta", "Traslado"], index=0 if val("tipo_informe", "Pedido de venta") == "Pedido de venta" else 1, disabled=bloqueado)
         nro_pedido = st.text_input("N° Pedido", value=val("nro_pedido", ""), disabled=bloqueado)
     with c2:
-        fecha = st.date_input("Fecha", value=date.today(), disabled=bloqueado)
+        fecha = st.date_input("Fecha", value=fecha_inicial, disabled=bloqueado)
         origen = st.text_input("Origen", value=val("origen", "Planta Dumestre"), disabled=bloqueado)
         cliente = st.text_input("Cliente", value=val("cliente", ""), disabled=bloqueado)
     with c3:
@@ -531,7 +541,7 @@ with st.form("datos"):
                 pedidos = nube.obtener_pedidos_nube()
                 for p in pedidos:
                     if p['id'] == pedido_actual:
-                        p.update({"nro_entrega": nro_entrega, "transporte": transporte, "cliente": cliente, "nro_pedido": nro_pedido, "guia_despacho": guia_despacho, "chofer": chofer, "patente_camion": patente_camion, "patente_rampla": patente_rampla, "sello_final": sello_final, "sellos_provisorios": sellos_provisorios, "nro_termografo": nro_termografo})
+                        p.update({"nro_entrega": nro_entrega, "transporte": transporte, "cliente": cliente, "nro_pedido": nro_pedido, "fecha": fecha.strftime("%Y-%m-%d"), "guia_despacho": guia_despacho, "chofer": chofer, "patente_camion": patente_camion, "patente_rampla": patente_rampla, "sello_final": sello_final, "sellos_provisorios": sellos_provisorios, "nro_termografo": nro_termografo})
                         nube.subir_pedido_nube(pedido_actual, p)
                         st.success("Guardado.")
                         st.rerun()
