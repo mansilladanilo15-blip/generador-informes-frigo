@@ -1,14 +1,18 @@
+
 import base64
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 import logging
 import os
+import re
+from html import escape
 
 from PIL import Image, ImageOps
 from weasyprint import HTML
 
 import config
+
 
 logging.basicConfig(
     filename=config.LOGS_DIR / "informes.log",
@@ -18,6 +22,7 @@ logging.basicConfig(
 
 
 def comprimir_foto(ruta_o_bytes, tamano_max=None):
+
     if tamano_max is None:
         tamano_max = config.ANCHO_MAX_FOTO
 
@@ -30,362 +35,180 @@ def comprimir_foto(ruta_o_bytes, tamano_max=None):
 
     if img.width > tamano_max:
         ratio = tamano_max / img.width
-        img = img.resize((tamano_max, int(img.height * ratio)))
+        img = img.resize(
+            (tamano_max, int(img.height * ratio))
+        )
 
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
 
     buffer = BytesIO()
+
     img.save(
         buffer,
         format="JPEG",
         quality=config.CALIDAD_JPEG,
         optimize=True
     )
-    b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    b64 = base64.b64encode(
+        buffer.getvalue()
+    ).decode("utf-8")
+
     return f"data:image/jpeg;base64,{b64}"
 
 
 def construir_grid_fotos(lista_fotos, tamano_foto=1200):
     """
-    Genera tablas HTML con fotografías y distribuciones según
-    la cantidad de imágenes disponibles.
+    Distribuye fotografías en grupos de cuatro.
+    Cada grupo utiliza una cuadrícula 2 x 2.
+    Cada grupo se mantiene completo en una página.
     """
+
     if not lista_fotos:
         return ""
 
+    html = []
     total = len(lista_fotos)
-    html = ""
 
-    # Una fotografía
-    if total == 1:
-        foto = lista_fotos[0]
-        data_uri = comprimir_foto(
-            foto["archivo"],
-            tamano_max=tamano_foto
+    for inicio in range(0, total, 4):
+
+        grupo = lista_fotos[inicio:inicio + 4]
+
+        if inicio > 0:
+            html.append(
+                '<div class="salto-pagina"></div>'
+            )
+
+        clase_tabla = (
+            "tabla-fotos tabla-single"
+            if len(grupo) == 1
+            else "tabla-fotos"
         )
-        pie = foto.get("pie", "Foto 1")
 
-        return f'''
-        <table class="tabla-fotos tabla-single">
-          <tr>
-            <td class="celda-foto single">
-              <div class="contenedor-img single">
-                <img src="{data_uri}">
-              </div>
-              <div class="pie-foto">{pie}</div>
-            </td>
-          </tr>
-        </table>
-        '''
-
-    # Dos fotografías
-    if total == 2:
-        html += '<table class="tabla-fotos"><tr>'
-
-        for i in range(1, 3):
-            foto = lista_fotos[i - 1]
-            data_uri = comprimir_foto(
-                foto["archivo"],
-                tamano_max=tamano_foto
-            )
-            pie = foto.get("pie", f"Foto {i}")
-
-            html += f'''
-            <td class="celda-foto grande">
-              <div class="contenedor-img">
-                <img src="{data_uri}">
-              </div>
-              <div class="pie-foto">{pie}</div>
-            </td>
-            '''
-
-        html += '</tr></table>'
-        return html
-
-    # Tres fotografías
-    if total == 3:
-        foto1 = lista_fotos[0]
-        data1 = comprimir_foto(
-            foto1["archivo"],
-            tamano_max=tamano_foto
+        html.append(
+            f'<table class="{clase_tabla}"><tbody>'
         )
-        pie1 = foto1.get("pie", "Foto 1")
 
-        html += f'''
-        <table class="tabla-fotos">
-          <tr>
-            <td class="celda-foto ancha" colspan="2">
-              <div class="contenedor-img ancha">
-                <img src="{data1}">
-              </div>
-              <div class="pie-foto">{pie1}</div>
-            </td>
-          </tr>
-        </table>
-        '''
+        for fila_inicio in range(0, len(grupo), 2):
 
-        html += '<table class="tabla-fotos"><tr>'
+            html.append("<tr>")
 
-        for i in [2, 3]:
-            foto = lista_fotos[i - 1]
-            data_uri = comprimir_foto(
-                foto["archivo"],
-                tamano_max=tamano_foto
-            )
-            pie = foto.get("pie", f"Foto {i}")
+            fila = grupo[
+                fila_inicio:fila_inicio + 2
+            ]
 
-            html += f'''
-            <td class="celda-foto mediana">
-              <div class="contenedor-img">
-                <img src="{data_uri}">
-              </div>
-              <div class="pie-foto">{pie}</div>
-            </td>
-            '''
+            for foto in fila:
 
-        html += '</tr></table>'
-        return html
-
-    # Cuatro fotografías: distribución 2 x 2
-    if total == 4:
-        html += '<table class="tabla-fotos">'
-
-        for fila in range(2):
-            html += '<tr>'
-
-            for col in range(2):
-                idx = fila * 2 + col + 1
-                foto = lista_fotos[idx - 1]
                 data_uri = comprimir_foto(
                     foto["archivo"],
                     tamano_max=tamano_foto
                 )
-                pie = foto.get("pie", f"Foto {idx}")
 
-                html += f'''
-                <td class="celda-foto mediana">
-                  <div class="contenedor-img">
-                    <img src="{data_uri}">
-                  </div>
-                  <div class="pie-foto">{pie}</div>
-                </td>
-                '''
-
-            html += '</tr>'
-
-        html += '</table>'
-        return html
-
-    # Cinco o más fotografías
-    idx = 1
-    primera_pagina = True
-
-    while idx <= total:
-        fotos_restantes = total - idx + 1
-
-        if not primera_pagina:
-            html += '<div class="salto-pagina"></div>'
-
-        fotos_en_esta_hoja = min(4, fotos_restantes)
-
-        if fotos_restantes <= 4:
-            fotos_en_esta_hoja = fotos_restantes
-
-        # Una fotografía restante
-        if fotos_en_esta_hoja == 1:
-            foto = lista_fotos[idx - 1]
-            data_uri = comprimir_foto(
-                foto["archivo"],
-                tamano_max=tamano_foto
-            )
-            pie = foto.get("pie", f"Foto {idx}")
-
-            html += f'''
-            <table class="tabla-fotos tabla-single">
-              <tr>
-                <td class="celda-foto single">
-                  <div class="contenedor-img single">
-                    <img src="{data_uri}">
-                  </div>
-                  <div class="pie-foto">{pie}</div>
-                </td>
-              </tr>
-            </table>
-            '''
-
-            idx += 1
-
-        # Dos fotografías restantes
-        elif fotos_en_esta_hoja == 2:
-            html += '<table class="tabla-fotos"><tr>'
-
-            for j in range(2):
-                foto = lista_fotos[idx - 1]
-                data_uri = comprimir_foto(
-                    foto["archivo"],
-                    tamano_max=tamano_foto
+                pie = escape(
+                    str(foto.get("pie", "Fotografía"))
                 )
-                pie = foto.get("pie", f"Foto {idx}")
 
-                html += f'''
-                <td class="celda-foto mediana">
-                  <div class="contenedor-img">
-                    <img src="{data_uri}">
-                  </div>
-                  <div class="pie-foto">{pie}</div>
-                </td>
-                '''
-
-                idx += 1
-
-            html += '</tr></table>'
-
-        # Tres fotografías restantes
-        elif fotos_en_esta_hoja == 3:
-            foto1 = lista_fotos[idx - 1]
-            data1 = comprimir_foto(
-                foto1["archivo"],
-                tamano_max=tamano_foto
-            )
-            pie1 = foto1.get("pie", f"Foto {idx}")
-
-            html += f'''
-            <table class="tabla-fotos">
-              <tr>
-                <td class="celda-foto mediana" colspan="2">
-                  <div class="contenedor-img">
-                    <img src="{data1}">
-                  </div>
-                  <div class="pie-foto">{pie1}</div>
-                </td>
-              </tr>
-            </table>
-            '''
-
-            idx += 1
-            html += '<table class="tabla-fotos"><tr>'
-
-            for j in range(2):
-                foto = lista_fotos[idx - 1]
-                data_uri = comprimir_foto(
-                    foto["archivo"],
-                    tamano_max=tamano_foto
+                clase_contenedor = (
+                    "contenedor-img single"
+                    if len(grupo) == 1
+                    else "contenedor-img"
                 )
-                pie = foto.get("pie", f"Foto {idx}")
 
-                html += f'''
-                <td class="celda-foto mediana">
-                  <div class="contenedor-img">
-                    <img src="{data_uri}">
-                  </div>
-                  <div class="pie-foto">{pie}</div>
-                </td>
-                '''
+                html.append(
+                    '<td class="celda-foto">'
+                    f'<div class="{clase_contenedor}">'
+                    f'<img src="{data_uri}" alt="{pie}">'
+                    '</div>'
+                    f'<div class="pie-foto">{pie}</div>'
+                    '</td>'
+                )
 
-                idx += 1
+            if len(fila) == 1:
+                html.append(
+                    '<td class="celda-foto celda-vacia"></td>'
+                )
 
-            html += '</tr></table>'
+            html.append("</tr>")
 
-        # Cuatro fotografías restantes
-        else:
-            html += '<table class="tabla-fotos">'
+        html.append("</tbody></table>")
 
-            for fila in range(2):
-                html += '<tr>'
-
-                for col in range(2):
-                    foto = lista_fotos[idx - 1]
-                    data_uri = comprimir_foto(
-                        foto["archivo"],
-                        tamano_max=tamano_foto
-                    )
-                    pie = foto.get("pie", f"Foto {idx}")
-
-                    html += f'''
-                    <td class="celda-foto mediana">
-                      <div class="contenedor-img">
-                        <img src="{data_uri}">
-                      </div>
-                      <div class="pie-foto">{pie}</div>
-                    </td>
-                    '''
-
-                    idx += 1
-
-                html += '</tr>'
-
-            html += '</table>'
-
-        primera_pagina = False
-
-    return html
-
+    return "".join(html)
 
 
 def construir_tabla_estibas(filas):
+    """
+    Construye el resumen de estibas:
+    N°, PATA, CANTIDAD y TOTAL CAJAS.
+    """
+
     if not filas:
         return ""
 
-    html = '''
-    <table class="tabla-estibas">
-      <thead>
-        <tr>
-          <th style="width:20%;">N°</th>
-          <th style="width:50%;">PATA</th>
-          <th style="width:30%;">CANTIDAD</th>
-        </tr>
-      </thead>
-      <tbody>
-    '''
+    html = [
+        '<table class="tabla-estibas">',
+        '<thead><tr>',
+        '<th class="col-numero">N°</th>',
+        '<th class="col-pata">PATA</th>',
+        '<th class="col-cantidad">CANTIDAD</th>',
+        '</tr></thead><tbody>'
+    ]
 
     total = 0
 
-    for i, f in enumerate(filas, start=1):
+    for indice, fila in enumerate(filas, start=1):
 
-        cantidad = f.get("cantidad", "")
-        pata = f.get("pata", i)
+        cantidad = fila.get("cantidad", "")
+        pata = fila.get("pata", indice)
 
         try:
             total += int(cantidad)
-        except (ValueError, TypeError):
+        except (TypeError, ValueError):
             pass
 
         try:
             pata_texto = (
                 str(int(pata))
                 if pata not in (None, "")
-                else str(i)
+                else str(indice)
             )
-        except (ValueError, TypeError):
-            pata_texto = str(pata) if pata else str(i)
+        except (TypeError, ValueError):
+            pata_texto = (
+                str(pata)
+                if pata
+                else str(indice)
+            )
 
-        html += f'''
-        <tr>
-          <td><strong>{pata_texto}</strong></td>
-          <td>PATA {pata_texto}</td>
-          <td>{cantidad}</td>
-        </tr>
-        '''
+        cantidad_texto = escape(
+            str(cantidad if cantidad not in (None, "") else 0)
+        )
 
-    html += f'''
-    <tr class="fila-total">
-      <td colspan="2">
-          TOTAL CAJAS
-      </td>
-      <td><strong>{total}</strong></td>
-    </tr>
-    '''
+        html.append(
+            '<tr>'
+            f'<td>{indice}</td>'
+            f'<td>PATA {escape(pata_texto)}</td>'
+            f'<td>{cantidad_texto}</td>'
+            '</tr>'
+        )
 
-    html += '''
-      </tbody>
-    </table>
-    '''
+    html.append(
+        '<tr class="fila-total">'
+        '<td colspan="2">TOTAL CAJAS</td>'
+        f'<td>{total}</td>'
+        '</tr>'
+    )
 
-    return html
+    html.append("</tbody></table>")
+
+    return "".join(html)
 
 
-def construir_seccion(titulo, contenido, salto_inicial=False):
+def construir_seccion(
+    titulo,
+    contenido,
+    salto_inicial=False
+):
+
     salto = (
         '<div class="salto-pagina"></div>'
         if salto_inicial
@@ -399,63 +222,115 @@ def construir_seccion(titulo, contenido, salto_inicial=False):
     '''
 
 
-def generar_informe(datos, fotos_por_categoria, filas_estibas=None):
+def generar_informe(
+    datos,
+    fotos_por_categoria,
+    filas_estibas=None
+):
+
     plantilla = (
         config.BASE_DIR / "plantilla.html"
     ).read_text(encoding="utf-8")
 
-    # Logos
+    # LOGOS
+
     logo_izq_html_grande = ""
-    logo_izq_html = ""
 
     if config.LOGO_PATH.exists():
-        logo_uri = comprimir_foto(config.LOGO_PATH)
-        logo_izq_html_grande = f'<img src="{logo_uri}">'
-        logo_izq_html = f'<img src="{logo_uri}">'
+
+        logo_uri = comprimir_foto(
+            config.LOGO_PATH
+        )
+
+        logo_izq_html_grande = (
+            f'<img src="{logo_uri}">'
+        )
 
     logo_der_html_grande = ""
-    logo_der_html = ""
 
     if config.LOGO2_PATH.exists():
-        logo2_uri = comprimir_foto(config.LOGO2_PATH)
-        logo_der_html_grande = f'<img src="{logo2_uri}">'
-        logo_der_html = f'<img src="{logo2_uri}">'
 
-    fecha_gen = datetime.now().strftime("%d/%m/%Y %H:%M")
+        logo2_uri = comprimir_foto(
+            config.LOGO2_PATH
+        )
 
+        logo_der_html_grande = (
+            f'<img src="{logo2_uri}">'
+        )
 
-    tipo = str(datos.get("tipo_informe", "")).strip().lower()
-    
+    fecha_gen = datetime.now().strftime(
+        "%d/%m/%Y %H:%M"
+    )
+
+    # TIPO DE INFORME
+
+    tipo = str(
+        datos.get("tipo_informe", "")
+    ).strip().lower()
+
     if "traslado" in tipo:
-        titulo_informe = "REPORTE FOTOGRAFICO CONGELADO"
-    else:
-        titulo_informe = "REPORTE FOTOGRAFICO FRESCO"
 
+        titulo_informe = (
+            "REPORTE FOTOGRAFICO CONGELADO"
+        )
+
+    else:
+
+        titulo_informe = (
+            "REPORTE FOTOGRAFICO FRESCO"
+        )
 
     secciones = []
 
-    # 1. Estibas
-    fotos_estibas = fotos_por_categoria.get("estibas", [])
+    # 1. ESTIBAS
+
+    fotos_estibas = fotos_por_categoria.get(
+        "estibas", []
+    )
+
     tabla_estibas = filas_estibas or []
 
     if fotos_estibas or tabla_estibas:
-        contenido = construir_tabla_estibas(tabla_estibas)
+
+        contenido = construir_tabla_estibas(
+            tabla_estibas
+        )
+
+        # Separar el resumen de las fotografías.
+        # Así no se reduce el espacio de la primera
+        # cuadrícula de cuatro fotografías.
+
+        if fotos_estibas and tabla_estibas:
+
+            contenido += (
+                '<div class="salto-pagina"></div>'
+            )
+
         contenido += construir_grid_fotos(
             fotos_estibas,
             tamano_foto=1200
         )
+
         secciones.append(
-            construir_seccion("1. Fotos Estibas", contenido)
+            construir_seccion(
+                "1. Fotos Estibas",
+                contenido
+            )
         )
 
-    # 2. Camión
-    fotos_camion = fotos_por_categoria.get("camion", [])
+    # 2. CAMIÓN
+
+    fotos_camion = fotos_por_categoria.get(
+        "camion", []
+    )
 
     if fotos_camion:
+
         contenido = construir_grid_fotos(
             fotos_camion,
             tamano_foto=1200
         )
+
         secciones.append(
             construir_seccion(
                 "2. Fotos Camión",
@@ -464,14 +339,19 @@ def generar_informe(datos, fotos_por_categoria, filas_estibas=None):
             )
         )
 
-    # 3. Termógrafo
-    fotos_termografo = fotos_por_categoria.get("termografo", [])
+    # 3. TERMÓGRAFO
+
+    fotos_termografo = fotos_por_categoria.get(
+        "termografo", []
+    )
 
     if fotos_termografo:
+
         contenido = construir_grid_fotos(
             fotos_termografo,
             tamano_foto=1200
         )
+
         secciones.append(
             construir_seccion(
                 "3. Termógrafo",
@@ -480,14 +360,19 @@ def generar_informe(datos, fotos_por_categoria, filas_estibas=None):
             )
         )
 
-    # 4. Sello
-    fotos_sello = fotos_por_categoria.get("sello", [])
+    # 4. SELLOS
+
+    fotos_sello = fotos_por_categoria.get(
+        "sello", []
+    )
 
     if fotos_sello:
+
         contenido = construir_grid_fotos(
             fotos_sello,
             tamano_foto=1200
         )
+
         secciones.append(
             construir_seccion(
                 "4. Sello/s final/es o provisorio/s",
@@ -496,14 +381,19 @@ def generar_informe(datos, fotos_por_categoria, filas_estibas=None):
             )
         )
 
-    # 5. Thermo-king
-    fotos_thermoking = fotos_por_categoria.get("thermoking", [])
+    # 5. THERMO-KING
+
+    fotos_thermoking = fotos_por_categoria.get(
+        "thermoking", []
+    )
 
     if fotos_thermoking:
+
         contenido = construir_grid_fotos(
             fotos_thermoking,
             tamano_foto=1200
         )
+
         secciones.append(
             construir_seccion(
                 "5. Thermo-king",
@@ -512,14 +402,19 @@ def generar_informe(datos, fotos_por_categoria, filas_estibas=None):
             )
         )
 
-    # 6. Etiqueta
-    fotos_etiqueta = fotos_por_categoria.get("etiqueta", [])
+    # 6. ETIQUETA
+
+    fotos_etiqueta = fotos_por_categoria.get(
+        "etiqueta", []
+    )
 
     if fotos_etiqueta:
+
         contenido = construir_grid_fotos(
             fotos_etiqueta,
             tamano_foto=1200
         )
+
         secciones.append(
             construir_seccion(
                 "6. Etiqueta",
@@ -528,112 +423,273 @@ def generar_informe(datos, fotos_por_categoria, filas_estibas=None):
             )
         )
 
-    # Número para el encabezado
-    nro_pedido_val = datos.get("nro_pedido", "").strip()
-    nro_entrega_val = datos.get("nro_entrega", "").strip()
+    # NÚMEROS DE DOCUMENTO
+
+    nro_pedido_val = str(
+        datos.get("nro_pedido") or ""
+    ).strip()
+
+    nro_entrega_val = str(
+        datos.get("nro_entrega") or ""
+    ).strip()
 
     if nro_pedido_val and nro_pedido_val != "-":
+
         nro_doc_html = (
             f'<div class="nro-doc">N° {nro_pedido_val}</div>'
         )
+
     elif nro_entrega_val and nro_entrega_val != "-":
+
         nro_doc_html = (
             f'<div class="nro-doc">N° {nro_entrega_val}</div>'
         )
+
     else:
+
         nro_doc_html = ""
 
-    if nro_pedido_val and nro_pedido_val != "-":
-        nro_pedido_display = nro_pedido_val
-    else:
-        nro_pedido_display = "—"
+    nro_pedido_display = (
+        nro_pedido_val
+        if nro_pedido_val and nro_pedido_val != "-"
+        else "—"
+    )
 
     if nro_pedido_val and nro_pedido_val != "-":
+
         pie_nro = nro_pedido_val
+
     elif nro_entrega_val and nro_entrega_val != "-":
+
         pie_nro = nro_entrega_val
+
     else:
+
         pie_nro = "S/N"
 
+    # REEMPLAZO DE DATOS EN PLANTILLA
+
     reemplazos = {
-        "{{logo_izq_html_grande}}": logo_izq_html_grande,
-        "{{logo_der_html_grande}}": logo_der_html_grande,
-        "{{empresa}}": datos.get("empresa", ""),
-        "{{titulo_informe}}": titulo_informe,
-        "{{nro_doc_html}}": nro_doc_html,
-        "{{nro_pedido_display}}": nro_pedido_display,
-        "{{tipo_informe}}": datos.get("tipo_informe", ""),
-        "{{nro_pedido}}": pie_nro,
-        "{{fecha}}": datos.get("fecha", ""),
-        "{{nro_entrega}}": datos.get("nro_entrega", "-"),
-        "{{guia_despacho}}": datos.get("guia_despacho", "-"),
-        "{{cliente}}": datos.get("cliente", ""),
-        "{{origen}}": datos.get("origen", ""),
-        "{{transporte}}": datos.get("transporte", "-"),
-        "{{chofer}}": datos.get("chofer", "-"),
-        "{{patente_camion}}": datos.get("patente_camion", "-"),
-        "{{patente_rampla}}": datos.get("patente_rampla", "-"),
-        "{{sello_final}}": datos.get("sello_final", "-"),
-        "{{sellos_provisorios}}": datos.get("sellos_provisorios", "-"),
-        "{{nro_termografo}}": datos.get("nro_termografo", "-"),
-        "{{secciones}}": "".join(secciones),
-        "{{fecha_generacion}}": fecha_gen,
+
+        "{{logo_izq_html_grande}}":
+            logo_izq_html_grande,
+
+        "{{logo_der_html_grande}}":
+            logo_der_html_grande,
+
+        "{{empresa}}":
+            datos.get("empresa", ""),
+
+        "{{titulo_informe}}":
+            titulo_informe,
+
+        "{{nro_doc_html}}":
+            nro_doc_html,
+
+        "{{nro_pedido_display}}":
+            nro_pedido_display,
+
+        "{{tipo_informe}}":
+            datos.get("tipo_informe", ""),
+
+        "{{nro_pedido}}":
+            pie_nro,
+
+        "{{fecha}}":
+            datos.get("fecha", ""),
+
+        "{{nro_entrega}}":
+            datos.get("nro_entrega", "-"),
+
+        "{{guia_despacho}}":
+            datos.get("guia_despacho", "-"),
+
+        "{{cliente}}":
+            datos.get("cliente", ""),
+
+        "{{origen}}":
+            datos.get("origen", ""),
+
+        "{{transporte}}":
+            datos.get("transporte", "-"),
+
+        "{{chofer}}":
+            datos.get("chofer", "-"),
+
+        "{{patente_camion}}":
+            datos.get("patente_camion", "-"),
+
+        "{{patente_rampla}}":
+            datos.get("patente_rampla", "-"),
+
+        "{{sello_final}}":
+            datos.get("sello_final", "-"),
+
+        "{{sellos_provisorios}}":
+            datos.get("sellos_provisorios", "-"),
+
+        "{{nro_termografo}}":
+            datos.get("nro_termografo", "-"),
+
+        "{{secciones}}":
+            "".join(secciones),
+
+        "{{fecha_generacion}}":
+            fecha_gen,
     }
 
     html_final = plantilla
 
     for clave, valor in reemplazos.items():
-        html_final = html_final.replace(clave, str(valor))
 
-    nro = (
-        datos.get("nro_pedido", "SN")
-        .replace("/", "-")
-        .replace(" ", "_")
+        html_final = html_final.replace(
+            clave,
+            str(valor)
+        )
+
+    # =====================================
+    # NOMBRE DEL ARCHIVO PDF
+    # =====================================
+
+    es_traslado = "traslado" in tipo
+
+    if es_traslado:
+
+        numero_documento = (
+            datos.get("nro_entrega")
+            or datos.get("nro_pedido")
+            or "SN"
+        )
+
+    else:
+
+        numero_documento = (
+            datos.get("nro_pedido")
+            or datos.get("nro_entrega")
+            or "SN"
+        )
+
+    numero_documento = re.sub(
+        r"[^A-Za-z0-9_-]+",
+        "_",
+        str(numero_documento).strip()
     )
 
-    if not nro or nro == "-" or nro == "SN":
-        nro = (
-            datos.get("nro_entrega", "SN")
-            .replace("/", "-")
-            .replace(" ", "_")
+    numero_documento = (
+        numero_documento.strip("_") or "SN"
+    )
+
+    fecha_pedido = (
+        datos.get("fecha")
+        or datos.get("fecha_creacion")
+        or datetime.now()
+    )
+
+    if hasattr(fecha_pedido, "strftime"):
+
+        fecha_archivo = fecha_pedido.strftime(
+            "%Y-%m-%d"
         )
 
-    fecha_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    nombre_pdf = f"{config.PREFIJO_PDF}_{nro}_{fecha_str}.pdf"
+    else:
 
-    # Guardar en la carpeta del pedido cuando exista
+        fecha_texto = str(fecha_pedido).strip()
+
+        fecha_archivo = ""
+
+        formatos_fecha = (
+            "%Y-%m-%d",
+            "%Y-%m-%d %H:%M",
+            "%Y-%m-%d %H:%M:%S",
+            "%d/%m/%Y",
+            "%d-%m-%Y",
+            "%Y-%m-%dT%H:%M:%S"
+        )
+
+        for formato in formatos_fecha:
+
+            try:
+
+                fecha_archivo = datetime.strptime(
+                    fecha_texto[:19],
+                    formato
+                ).strftime("%Y-%m-%d")
+
+                break
+
+            except ValueError:
+
+                continue
+
+        if not fecha_archivo:
+
+            fecha_archivo = datetime.now().strftime(
+                "%Y-%m-%d"
+            )
+
+    prefijo_nombre = str(
+        getattr(config, "PREFIJO_PDF", "INFORME")
+        or "INFORME"
+    ).strip()
+
+    nombre_pdf = (
+        f"{prefijo_nombre}_{numero_documento}_{fecha_archivo}.pdf"
+    )
+
+    # GUARDAR PDF
+
     pedido_id = datos.get("pedido_id")
 
-    if pedido_id and os.path.exists(f"temp/pedidos/{pedido_id}"):
-        ruta_pdf = (
-            Path(f"temp/pedidos/{pedido_id}") / nombre_pdf
-        )
-    else:
-        ruta_pdf = config.SALIDA_DIR / nombre_pdf
+    if pedido_id and os.path.exists(
+        f"temp/pedidos/{pedido_id}"
+    ):
 
-    # Generar PDF con WeasyPrint
-    ruta_pdf.parent.mkdir(parents=True, exist_ok=True)
+        ruta_pdf = (
+            Path(f"temp/pedidos/{pedido_id}")
+            / nombre_pdf
+        )
+
+    else:
+
+        ruta_pdf = (
+            config.SALIDA_DIR / nombre_pdf
+        )
+
+    ruta_pdf.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
     HTML(
         string=html_final,
         base_url=str(config.BASE_DIR)
     ).write_pdf(str(ruta_pdf))
 
-    # Guardar en historial
+    # GUARDAR EN HISTORIAL
+
     try:
+
         import historial
 
-        historial.guardar_informe(datos, nombre_pdf)
+        historial.guardar_informe(
+            datos,
+            nombre_pdf
+        )
+
         logging.info(
             f"Informe guardado en historial: {nombre_pdf}"
         )
+
     except Exception as e:
+
         logging.error(
             f"ERROR al guardar en historial: {e}"
         )
 
-    # Guardar JSON del último informe
+    # GUARDAR JSON DEL ÚLTIMO INFORME
+
     try:
+
         import json
 
         with open(
@@ -641,16 +697,22 @@ def generar_informe(datos, fotos_por_categoria, filas_estibas=None):
             "w",
             encoding="utf-8"
         ) as f:
+
             json.dump(
                 datos,
                 f,
                 ensure_ascii=False,
                 indent=2
             )
+
     except Exception as e:
+
         logging.warning(
             f"No se pudo guardar último informe: {e}"
         )
 
-    logging.info(f"Informe generado: {ruta_pdf}")
+    logging.info(
+        f"Informe generado: {ruta_pdf}"
+    )
+
     return ruta_pdf
