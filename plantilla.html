@@ -184,10 +184,6 @@ body {
     margin-top: 5px;
 }
 
-.salto-pagina {
-    page-break-before: always;
-    break-before: page;
-}
 
 table {
     page-break-inside: auto;
@@ -315,8 +311,13 @@ tr {
 
     /* ================== SECCIONES DE FOTOS ================== */
     .salto-pagina {
-      page-break-after: always;
-      break-after: page;
+      /* Un único salto ANTES del siguiente bloque: evita páginas vacías. */
+      display: block;
+      clear: both;
+      page-break-before: always;
+      break-before: page;
+      page-break-after: auto;
+      break-after: auto;
       height: 0;
       margin: 0;
       padding: 0;
@@ -371,9 +372,12 @@ tr {
 
     .contenedor-img img {
       display: block;
-      width: 100%;
+      width: auto;
+      max-width: 100%;
+      max-height: 95mm;
       height: auto;
       object-fit: contain;
+      margin: 0 auto;
     }
 
     .contenedor-img.single img {
