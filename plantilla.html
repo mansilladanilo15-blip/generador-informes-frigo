@@ -1,542 +1,256 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-
-<style>
-
-@page {
-    size: Letter;
-    margin: 2.6cm 1.6cm 1.8cm 1.6cm;
-
-    @bottom-left {
+  <meta charset="UTF-8">
+  <style>
+    @page {
+      size: Letter;
+      margin: 2.6cm 1.6cm 1.8cm 1.6cm;
+      @bottom-left {
         content: "Australis Mar SA | Informe fotográfico";
         font-family: Arial, sans-serif;
         font-size: 8pt;
         color: #526174;
         border-top: 1px solid #cbd5e1;
         padding-top: 5px;
-    }
-
-    @bottom-right {
-        content: "Documento N° " string(numero-documento)
-                 " | Página " counter(page)
-                 " de " counter(pages);
+      }
+      @bottom-right {
+        content: "Documento N° " string(numero-documento) " | Página " counter(page) " de " counter(pages);
         font-family: Arial, sans-serif;
         font-size: 8pt;
         color: #526174;
         border-top: 1px solid #cbd5e1;
         padding-top: 5px;
+      }
     }
-}
 
-* {
-    box-sizing: border-box;
-}
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #243247;
+      font-size: 10pt;
+      line-height: 1.3;
+    }
 
-body {
-    margin: 0;
-    padding: 0;
-    font-family: Arial, Helvetica, sans-serif;
-    color: #243247;
-    font-size: 10pt;
-    line-height: 1.3;
-}
+    .encabezado-repetido {
+      position: fixed;
+      top: -2.25cm;
+      left: 0;
+      right: 0;
+      height: 1.65cm;
+      border-bottom: 2px solid #1a4d8f;
+      background: white;
+    }
+    .encabezado-repetido .logos { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .encabezado-repetido .logos td { width: 33.33%; vertical-align: middle; border: none; padding: 0; }
+    .logo-izquierdo { text-align: left; }
+    .logo-derecho { text-align: right; }
+    .encabezado-repetido img { max-width: 3.4cm; max-height: 1.15cm; object-fit: contain; }
+    .texto-encabezado { text-align: center; font-size: 8pt; font-weight: bold; color: #1a4d8f; }
 
-/* ENCABEZADO */
+    .titulo-informe {
+      width: 100%;
+      text-align: center;
+      color: #1a4d8f;
+      font-size: 16pt;
+      font-weight: 800;
+      letter-spacing: .5px;
+      padding: 8px 4px;
+      margin: 0 0 8px 0;
+      border-bottom: 2px solid #1a4d8f;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    .banda-estado {
+      background: #f2f6fb;
+      border-left: 3px solid #1a4d8f;
+      padding: 5px 8px;
+      margin: 5px 0;
+      font-size: 8.5pt;
+    }
+    .banda-estado .etiqueta { font-weight: 700; color: #1a4d8f; }
+    .banda-estado .separador { color: #ccc; margin: 0 6px; }
 
-.encabezado-repetido {
-    position: fixed;
-    top: -2.25cm;
-    left: 0;
-    right: 0;
-    height: 1.65cm;
-    border-bottom: 2px solid #1a4d8f;
-    background: white;
-}
+    .tabla-datos { width: 100%; border-collapse: collapse; border: 1px solid #d0d7de; margin-bottom: 8px; }
+    .tabla-datos td { padding: 4px 7px; border: 1px solid #d0d7de; vertical-align: top; font-size: 9pt; }
+    .etiqueta-campo { width: 15%; background: #f2f6fb; font-weight: 600; color: #1a4d8f; text-transform: uppercase; }
+    .valor-campo { width: 35%; }
+    .subtitulo { background: #e8f0fa; color: #1a4d8f; font-weight: 700; font-size: 9pt; text-transform: uppercase; letter-spacing: .5px; padding: 4px 7px; border: 1px solid #d0d7de; border-bottom: none; }
 
-.encabezado-repetido .logos {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-}
+    .titulo-categoria {
+      background: #1a4d8f;
+      color: #fff;
+      font-size: 11pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 7px 10px;
+      margin: 0 0 8px 0;
+      border-radius: 3px;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    .salto-pagina {
+      display: block;
+      height: 0;
+      margin: 0;
+      padding: 0;
+      page-break-before: always;
+      break-before: page;
+      page-break-after: auto;
+      break-after: auto;
+    }
 
-.encabezado-repetido .logos td {
-    width: 33.33%;
-    vertical-align: middle;
-    border: none;
-    padding: 0;
-}
+    /* Resumen de estibas */
+    .tabla-estibas {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      margin: 0 0 10px 0;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      font-size: 9pt;
+    }
+    .tabla-estibas th, .tabla-estibas td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 8px;
+      text-align: center !important;
+      vertical-align: middle;
+    }
+    .tabla-estibas th { background: #eaf0f8; color: #1a365d; font-weight: 700; }
+    .tabla-estibas .col-numero { width: 20%; }
+    .tabla-estibas .col-pata { width: 50%; }
+    .tabla-estibas .col-cantidad { width: 30%; }
+    .tabla-estibas tbody tr:nth-child(even):not(.fila-total) td { background: #f7faff; }
+    .tabla-estibas .fila-total td {
+      background: #eaf0f8 !important;
+      color: #1a4d8f;
+      font-weight: 700;
+      border-top: 2px solid #9bb6d5;
+      padding: 8px;
+    }
+    .tabla-estibas .fila-total td:last-child { font-size: 11pt; }
 
-.logo-izquierdo {
-    text-align: left;
-}
+    /* Cada bloque generado por Python contiene máximo cuatro fotos (2x2).
+       Se mantiene completo en una sola página. */
+    .tabla-fotos {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: separate;
+      border-spacing: 7px 7px;
+      margin: 0 auto 8px auto;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .tabla-fotos tbody, .tabla-fotos tr, .tabla-fotos td {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .tabla-fotos td { width: 50%; padding: 3px; text-align: center; vertical-align: middle; }
+    .contenedor-img {
+      width: 100%;
+      height: 7.0cm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border: 1px solid #d0d7de;
+      border-radius: 4px;
+      background: #fafafa;
+    }
+    .contenedor-img img {
+      display: block;
+      max-width: 100%;
+      max-height: 6.8cm;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      object-position: center;
+      margin: 0 auto;
+    }
+    .tabla-fotos.tabla-single .contenedor-img.single { height: 14.5cm; }
+    .tabla-fotos.tabla-single .contenedor-img.single img { max-height: 14.2cm; }
+    .celda-vacia { border: none !important; background: transparent !important; }
+    .pie-foto { text-align: center; font-size: 8pt; color: #526174; overflow-wrap: anywhere; margin-top: 4px; }
 
-.logo-derecho {
-    text-align: right;
-}
-
-.encabezado-repetido img {
-    max-width: 3.4cm;
-    max-height: 1.15cm;
-    object-fit: contain;
-}
-
-.texto-encabezado {
-    text-align: center;
-    font-size: 8pt;
-    font-weight: bold;
-    color: #1a4d8f;
-}
-
-/* TITULO PRINCIPAL */
-
-.titulo-informe {
-    width: 100%;
-    text-align: center;
-    color: #1a4d8f;
-    font-size: 16pt;
-    font-weight: 800;
-    letter-spacing: 0.5px;
-    padding: 8px 4px;
-    margin: 0 0 8px 0;
-    border-bottom: 2px solid #1a4d8f;
-    page-break-after: avoid;
-    break-after: avoid;
-}
-
-/* DATOS GENERALES */
-
-.banda-estado {
-    background: #f2f6fb;
-    border-left: 3px solid #1a4d8f;
-    padding: 5px 8px;
-    margin: 5px 0;
-    font-size: 8.5pt;
-}
-
-.banda-estado .etiqueta {
-    font-weight: 700;
-    color: #1a4d8f;
-}
-
-.banda-estado .separador {
-    color: #ccc;
-    margin: 0 6px;
-}
-
-.tabla-datos {
-    width: 100%;
-    border-collapse: collapse;
-    border: 1px solid #d0d7de;
-    margin-bottom: 8px;
-}
-
-.tabla-datos td {
-    padding: 4px 7px;
-    border: 1px solid #d0d7de;
-    vertical-align: top;
-    font-size: 9pt;
-}
-
-.etiqueta-campo {
-    width: 15%;
-    background: #f2f6fb;
-    font-weight: 600;
-    color: #1a4d8f;
-    text-transform: uppercase;
-}
-
-.valor-campo {
-    width: 35%;
-}
-
-.subtitulo {
-    background: #e8f0fa;
-    color: #1a4d8f;
-    font-weight: 700;
-    font-size: 9pt;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 4px 7px;
-    border: 1px solid #d0d7de;
-    border-bottom: none;
-}
-
-/* TITULOS DE CATEGORIAS */
-
-.titulo-categoria {
-    background: #1a4d8f;
-    color: #ffffff;
-    font-size: 11pt;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 7px 10px;
-    margin: 0 0 8px 0;
-    border-radius: 3px;
-    page-break-after: avoid;
-    break-after: avoid;
-}
-
-/* SALTO DE PAGINA */
-
-.salto-pagina {
-    display: block;
-    height: 0;
-    margin: 0;
-    padding: 0;
-    page-break-before: always;
-    break-before: page;
-    page-break-after: auto;
-    break-after: auto;
-}
-
-/* TABLA RESUMEN DE ESTIBAS */
-
-.tabla-estibas {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-    margin: 0 0 10px 0;
-    page-break-inside: avoid;
-    break-inside: avoid;
-    font-size: 9pt;
-}
-
-.tabla-estibas th,
-.tabla-estibas td {
-    border: 1px solid #cbd5e1;
-    padding: 6px 8px;
-    text-align: center !important;
-    vertical-align: middle;
-}
-
-.tabla-estibas th {
-    background: #eaf0f8;
-    color: #1a365d;
-    font-weight: 700;
-}
-
-.tabla-estibas .col-numero {
-    width: 20%;
-}
-
-.tabla-estibas .col-pata {
-    width: 50%;
-}
-
-.tabla-estibas .col-cantidad {
-    width: 30%;
-}
-
-.tabla-estibas tbody tr:nth-child(even):not(.fila-total) td {
-    background: #f7faff;
-}
-
-/* TOTAL CAJAS */
-
-.tabla-estibas .fila-total td {
-    background: #eaf0f8 !important;
-    color: #1a4d8f;
-    font-weight: 700;
-    border-top: 2px solid #9bb6d5;
-    padding: 8px;
-}
-
-.tabla-estibas .fila-total td:last-child {
-    font-size: 11pt;
-}
-
-/* CUADRICULA DE FOTOGRAFIAS */
-
-.tabla-fotos {
-    width: 100%;
-    table-layout: fixed;
-    border-collapse: separate;
-    border-spacing: 7px 7px;
-    margin: 0 auto 8px auto;
-
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-}
-
-.tabla-fotos tbody,
-.tabla-fotos tr,
-.tabla-fotos td {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-}
-
-.tabla-fotos td {
-    width: 50%;
-    padding: 3px;
-    text-align: center;
-    vertical-align: middle;
-}
-
-/* FOTOGRAFIAS NORMALES: 4 POR PAGINA */
-
-.contenedor-img {
-    width: 100%;
-    height: 7.0cm;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    overflow: hidden;
-    border: 1px solid #d0d7de;
-    border-radius: 4px;
-    background: #fafafa;
-}
-
-.contenedor-img img {
-    display: block;
-    max-width: 100%;
-    max-height: 6.8cm;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-    object-position: center;
-    margin: 0 auto;
-}
-
-/* FOTOGRAFIA INDIVIDUAL */
-
-.tabla-fotos.tabla-single .contenedor-img.single {
-    height: 14.5cm;
-}
-
-.tabla-fotos.tabla-single .contenedor-img.single img {
-    max-height: 14.2cm;
-}
-
-/* CELDA VACIA */
-
-.celda-vacia {
-    border: none !important;
-    background: transparent !important;
-}
-
-/* PIE DE FOTOGRAFIA */
-
-.pie-foto {
-    text-align: center;
-    font-size: 8pt;
-    color: #526174;
-    overflow-wrap: anywhere;
-    margin-top: 4px;
-}
-
-/* CONTROL DE PAGINACION */
-
-table {
-    page-break-inside: auto;
-}
-
-.tabla-fotos,
-.tabla-estibas {
-    page-break-inside: avoid !important;
-}
-
-thead {
-    display: table-header-group;
-}
-
-tr {
-    page-break-inside: avoid;
-    break-inside: avoid;
-}
-
-</style>
+    table { page-break-inside: auto; }
+    .tabla-fotos, .tabla-estibas { page-break-inside: avoid !important; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; break-inside: avoid; }
+  </style>
 </head>
-
 <body>
-
-<!-- ENCABEZADO REPETIDO -->
-
 <div class="encabezado-repetido">
-
-    <table class="logos">
-
-        <tr>
-
-            <td class="logo-izquierdo">
-                {{logo_izq_html_grande}}
-            </td>
-
-            <td class="texto-encabezado">
-                AUSTRALIS MAR SA
-            </td>
-
-            <td class="logo-derecho">
-                {{logo_der_html_grande}}
-            </td>
-
-        </tr>
-
-    </table>
-
+  <table class="logos">
+    <tr>
+      <td class="logo-izquierdo">
+        {{logo_izq_html_grande}}
+      </td>
+      <td class="texto-encabezado">
+        AUSTRALIS MAR SA
+      </td>
+      <td class="logo-derecho">
+        {{logo_der_html_grande}}
+      </td>
+    </tr>
+  </table>
 </div>
 
-<!-- TITULO SEGUN TIPO DE OPERACION -->
+<div class="titulo-informe">{{titulo_informe}}</div>
 
-<div class="titulo-informe">
-    {{titulo_informe}}
-</div>
-
-<!-- FECHA Y DOCUMENTACION -->
-
-<div class="banda-estado">
-
-    <span class="etiqueta">FECHA:</span>
-    {{fecha}}
-
+  <div class="banda-estado">
+    <span class="etiqueta">FECHA:</span> {{fecha}}
     <span class="separador">|</span>
-
-    <span class="etiqueta">N° ENTREGA:</span>
-    {{nro_entrega}}
-
+    <span class="etiqueta">N° ENTREGA:</span> {{nro_entrega}}
     <span class="separador">|</span>
+    <span class="etiqueta">GUÍA DESPACHO:</span> {{guia_despacho}}
+  </div>
 
-    <span class="etiqueta">GUÍA DESPACHO:</span>
-    {{guia_despacho}}
-
-</div>
-
-<!-- DATOS GENERALES -->
-
-<table class="tabla-datos">
-
+  <table class="tabla-datos">
     <tr>
-
-        <td class="etiqueta-campo">
-            Cliente / Destino
-        </td>
-
-        <td class="valor-campo">
-            {{cliente}}
-        </td>
-
-        <td class="etiqueta-campo">
-            Origen
-        </td>
-
-        <td class="valor-campo">
-            {{origen}}
-        </td>
-
+      <td class="etiqueta-campo">Cliente / Destino</td>
+      <td class="valor-campo">{{cliente}}</td>
+      <td class="etiqueta-campo">Origen</td>
+      <td class="valor-campo">{{origen}}</td>
     </tr>
-
     <tr>
-
-        <td class="etiqueta-campo">
-            N° Pedido
-        </td>
-
-        <td class="valor-campo">
-            {{nro_pedido_display}}
-        </td>
-
-        <td class="etiqueta-campo">
-            Tipo
-        </td>
-
-        <td class="valor-campo">
-            {{tipo_informe}}
-        </td>
-
+      <td class="etiqueta-campo">N° Pedido</td>
+      <td class="valor-campo">{{nro_pedido_display}}</td>
+      <td class="etiqueta-campo">Tipo</td>
+      <td class="valor-campo">{{tipo_informe}}</td>
     </tr>
+  </table>
 
-</table>
-
-<!-- TRANSPORTE -->
-
-<div class="subtitulo">
-    🚛 Datos del transporte
-</div>
-
-<table class="tabla-datos" style="margin-bottom: 12px;">
-
+  <div class="subtitulo">🚛 Datos del transporte</div>
+  <table class="tabla-datos" style="margin-bottom: 12px;">
     <tr>
-
-        <td class="etiqueta-campo">
-            Transporte
-        </td>
-
-        <td class="valor-campo">
-            {{transporte}}
-        </td>
-
-        <td class="etiqueta-campo">
-            Chofer
-        </td>
-
-        <td class="valor-campo">
-            {{chofer}}
-        </td>
-
+      <td class="etiqueta-campo">Transporte</td>
+      <td class="valor-campo">{{transporte}}</td>
+      <td class="etiqueta-campo">Chofer</td>
+      <td class="valor-campo">{{chofer}}</td>
     </tr>
-
     <tr>
-
-        <td class="etiqueta-campo">
-            Patente Camión
-        </td>
-
-        <td class="valor-campo">
-            {{patente_camion}}
-        </td>
-
-        <td class="etiqueta-campo">
-            Patente Rampla
-        </td>
-
-        <td class="valor-campo">
-            {{patente_rampla}}
-        </td>
-
+      <td class="etiqueta-campo">Patente Camión</td>
+      <td class="valor-campo">{{patente_camion}}</td>
+      <td class="etiqueta-campo">Patente Rampla</td>
+      <td class="valor-campo">{{patente_rampla}}</td>
     </tr>
-
     <tr>
-
-        <td class="etiqueta-campo">
-            Sello Final
-        </td>
-
-        <td class="valor-campo">
-            {{sello_final}}
-        </td>
-
-        <td class="etiqueta-campo">
-            Sellos Provisorios
-        </td>
-
-        <td class="valor-campo">
-            {{sellos_provisorios}}
-        </td>
-
+      <td class="etiqueta-campo">Sello Final</td>
+      <td class="valor-campo">{{sello_final}}</td>
+      <td class="etiqueta-campo">Sellos Provisorios</td>
+      <td class="valor-campo">{{sellos_provisorios}}</td>
     </tr>
-
     <tr>
-
-        <td class="etiqueta-campo">
-            N° Termógrafo
-        </td>
-
-        <td class="valor-campo" colspan="3">
-            {{nro_termografo}}
-        </td>
-
+      <td class="etiqueta-campo">N° Termógrafo</td>
+      <td class="valor-campo" colspan="3">{{nro_termografo}}</td>
     </tr>
+  </table>
 
-</table>
-
-<!-- TODAS LAS SECCIONES FOTOGRAFICAS -->
-
-{{secciones}}
+  <!-- 🔥 AQUÍ VAN TODAS LAS SECCIONES DE FOTOS -->
+  {{secciones}}
 
 </body>
 </html>
