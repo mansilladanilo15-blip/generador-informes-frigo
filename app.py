@@ -200,42 +200,88 @@ def _generar_pdf_pedido(pedido_id):
         "estibas": "estiba_pata_",
     }
 
-    # 3. Descargar bytes de cada foto y armar dicts con "archivo" + "pie"
-    def descargar_categoria(prefijo):
+    # 3. Descargar fotografías y asignar pies descriptivos.
+    # No mostrar nombres internos/UUID de Storage en el informe.
+    cajas_nube = pedido_data.get("cajas_estibas", {}) or {}
+    patas_nube = pedido_data.get("patas_estibas", {}) or {}
+    nro_termografo = str(pedido_data.get("nro_termografo") or "").strip()
+
+    def obtener_numero_pata(nombre):
+        valor = patas_nube.get(nombre)
+        if valor not in (None, "", 0, "0"):
+            try:
+                return int(valor)
+            except (TypeError, ValueError):
+                pass
+        # Respaldo para nombres del tipo estiba_pata_10_<id>.jpg
+        partes = nombre.split("_")
+        try:
+            return int(partes[2])
+        except (IndexError, TypeError, ValueError):
+            return 999999
+
+    etiquetas_categoria = {
+        "camion": "Camión",
+        "sello": "Sello",
+        "thermoking": "Thermo-King",
+        "etiqueta": "Etiqueta",
+        "documentacion": "Documentación",
+    }
+
+    def descargar_categoria(prefijo, categoria):
         resultado = []
-        for nombre in nombres_fotos:
-            if not nombre.startswith(prefijo):
-                continue
+        nombres_categoria = [n for n in nombres_fotos if n.startswith(prefijo)]
+        if categoria == "estibas":
+            # Storage suele devolver nombres alfabéticamente: ordenar por pata numérica.
+            nombres_categoria.sort(key=obtener_numero_pata)
+        for nombre in nombres_categoria:
             try:
                 contenido = nube.descargar_foto_nube(pedido_id, nombre)
-            except Exception:
-                continue  # si falla una, se omite sin romper el informe
-            pie = nombre.rsplit(".", 1)[0]
+            except Exception as exc:
+                logging.warning("No se pudo descargar la foto %s: %s", nombre, exc)
+                continue
+
+            indice = len(resultado) + 1
+            if categoria == "estibas":
+                pata = obtener_numero_pata(nombre)
+                if pata == 999999:
+                    pata = indice
+                pie = f"Estiba · Pata {pata}"
+            elif categoria == "termografo":
+                if nro_termografo and nro_termografo != "-":
+                    pie = f"Termógrafo N° {nro_termografo} · Foto {indice}"
+                else:
+                    pie = f"Termógrafo · Foto {indice}"
+            else:
+                pie = f"{etiquetas_categoria.get(categoria, categoria.title())} · Foto {indice}"
+
             resultado.append({"archivo": contenido, "pie": pie})
         return resultado
 
     fotos_por_categoria = {
-        "estibas": descargar_categoria(prefijos["estibas"]),
-        "camion": descargar_categoria(prefijos["camion"]),
-        "termografo": descargar_categoria(prefijos["termografo"]),
-        "sello": descargar_categoria(prefijos["sello"]),
-        "thermoking": descargar_categoria(prefijos["thermoking"]),
-        "etiqueta": descargar_categoria(prefijos["etiqueta"]),
-        "documentacion": descargar_categoria(prefijos["documentacion"]),
+        "estibas": descargar_categoria(prefijos["estibas"], "estibas"),
+        "camion": descargar_categoria(prefijos["camion"], "camion"),
+        "termografo": descargar_categoria(prefijos["termografo"], "termografo"),
+        "sello": descargar_categoria(prefijos["sello"], "sello"),
+        "thermoking": descargar_categoria(prefijos["thermoking"], "thermoking"),
+        "etiqueta": descargar_categoria(prefijos["etiqueta"], "etiqueta"),
+        "documentacion": descargar_categoria(prefijos["documentacion"], "documentacion"),
     }
 
     # 4. Filas de estibas: construir_tabla_estibas espera [{"cantidad": int}, ...]
-    cajas_nube = pedido_data.get("cajas_estibas", {}) or {}
-    patas_nube = pedido_data.get("patas_estibas", {}) or {}
     filas_estibas = []
-    for nombre in nombres_fotos:
-        if not nombre.startswith("estiba_pata_"):
-            continue
+    nombres_estibas = [n for n in nombres_fotos if n.startswith("estiba_pata_")]
+    nombres_estibas.sort(key=obtener_numero_pata)
+    for nombre in nombres_estibas:
+        try:
+            cantidad = int(cajas_nube.get(nombre, 0) or 0)
+        except (TypeError, ValueError):
+            cantidad = 0
+        pata = obtener_numero_pata(nombre)
         filas_estibas.append({
-            "pata": int(patas_nube.get(nombre, 0) or 0),
-            "cantidad": int(cajas_nube.get(nombre, 0) or 0),
+            "pata": pata if pata != 999999 else len(filas_estibas) + 1,
+            "cantidad": cantidad,
         })
-    filas_estibas.sort(key=lambda x: x["pata"])
 
     # 5. Diccionario de datos que consume la plantilla
     datos = {
@@ -254,7 +300,7 @@ def _generar_pdf_pedido(pedido_id):
         "patente_rampla": pedido_data.get("patente_rampla", "-"),
         "sello_final": pedido_data.get("sello_final", "-"),
         "sellos_provisorios": pedido_data.get("sellos_provisorios", "-"),
-        "nro_termografo": pedido_data.get("nro_termografo", "-"),
+        "nro_termografo": nro_termografo or "-",
     }
 
     # 6. Llamar al generador real
