@@ -1,8 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <style>
+<meta charset="UTF-8">
+
+<style>
 
 @page {
     size: Letter;
@@ -19,7 +21,8 @@
 
     @bottom-right {
         content: "Documento N° " string(numero-documento)
-                 " | Página " counter(page) " de " counter(pages);
+                 " | Página " counter(page)
+                 " de " counter(pages);
         font-family: Arial, sans-serif;
         font-size: 8pt;
         color: #526174;
@@ -28,13 +31,20 @@
     }
 }
 
+* {
+    box-sizing: border-box;
+}
+
 body {
     margin: 0;
     padding: 0;
     font-family: Arial, Helvetica, sans-serif;
     color: #243247;
     font-size: 10pt;
+    line-height: 1.3;
 }
+
+/* ENCABEZADO */
 
 .encabezado-repetido {
     position: fixed;
@@ -59,11 +69,11 @@ body {
     padding: 0;
 }
 
-.encabezado-repetido .logo-izquierdo {
+.logo-izquierdo {
     text-align: left;
 }
 
-.encabezado-repetido .logo-derecho {
+.logo-derecho {
     text-align: right;
 }
 
@@ -73,30 +83,125 @@ body {
     object-fit: contain;
 }
 
-.encabezado-repetido .texto-encabezado {
+.texto-encabezado {
     text-align: center;
     font-size: 8pt;
     font-weight: bold;
     color: #1a4d8f;
 }
 
+/* TITULO PRINCIPAL */
+
+.titulo-informe {
+    width: 100%;
+    text-align: center;
+    color: #1a4d8f;
+    font-size: 16pt;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    padding: 8px 4px;
+    margin: 0 0 8px 0;
+    border-bottom: 2px solid #1a4d8f;
+    page-break-after: avoid;
+    break-after: avoid;
+}
+
+/* DATOS GENERALES */
+
+.banda-estado {
+    background: #f2f6fb;
+    border-left: 3px solid #1a4d8f;
+    padding: 5px 8px;
+    margin: 5px 0;
+    font-size: 8.5pt;
+}
+
+.banda-estado .etiqueta {
+    font-weight: 700;
+    color: #1a4d8f;
+}
+
+.banda-estado .separador {
+    color: #ccc;
+    margin: 0 6px;
+}
+
+.tabla-datos {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #d0d7de;
+    margin-bottom: 8px;
+}
+
+.tabla-datos td {
+    padding: 4px 7px;
+    border: 1px solid #d0d7de;
+    vertical-align: top;
+    font-size: 9pt;
+}
+
+.etiqueta-campo {
+    width: 15%;
+    background: #f2f6fb;
+    font-weight: 600;
+    color: #1a4d8f;
+    text-transform: uppercase;
+}
+
+.valor-campo {
+    width: 35%;
+}
+
+.subtitulo {
+    background: #e8f0fa;
+    color: #1a4d8f;
+    font-weight: 700;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 7px;
+    border: 1px solid #d0d7de;
+    border-bottom: none;
+}
+
+/* TITULOS DE CATEGORIAS */
+
 .titulo-categoria {
     background: #1a4d8f;
-    color: white;
-    font-weight: bold;
+    color: #ffffff;
     font-size: 11pt;
-    padding: 8px 10px;
-    margin: 0 0 12px 0;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 7px 10px;
+    margin: 0 0 8px 0;
     border-radius: 3px;
     page-break-after: avoid;
     break-after: avoid;
 }
 
+/* SALTO DE PAGINA */
+
+.salto-pagina {
+    display: block;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    page-break-before: always;
+    break-before: page;
+    page-break-after: auto;
+    break-after: auto;
+}
+
+/* TABLA RESUMEN DE ESTIBAS */
+
 .tabla-estibas {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
-    margin: 0 0 16px 0;
+    margin: 0 0 10px 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
     font-size: 9pt;
 }
 
@@ -104,129 +209,136 @@ body {
 .tabla-estibas td {
     border: 1px solid #cbd5e1;
     padding: 6px 8px;
-    text-align: center;
+    text-align: center !important;
     vertical-align: middle;
-    overflow-wrap: break-word;
 }
 
 .tabla-estibas th {
     background: #eaf0f8;
     color: #1a365d;
-    font-weight: bold;
+    font-weight: 700;
 }
 
 .tabla-estibas .col-numero {
-    width: 18%;
+    width: 20%;
 }
 
-.tabla-estibas .col-producto {
-    width: 52%;
+.tabla-estibas .col-pata {
+    width: 50%;
 }
 
 .tabla-estibas .col-cantidad {
     width: 30%;
 }
 
-.tabla-estibas .fila-total {
-    background: #1a4d8f;
-    color: white;
-    font-weight: bold;
-}
-    
-/* ==========================================
-   TABLA RESUMEN DE ESTIBAS
-   ========================================== */
-
-.tabla-estibas {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
+.tabla-estibas tbody tr:nth-child(even):not(.fila-total) td {
+    background: #f7faff;
 }
 
-.tabla-estibas th {
-    text-align: center !important;
-    vertical-align: middle;
-    font-weight: 700;
-    color: #1a365d;
-    background: #eaf0f8;
-    padding: 7px;
-}
+/* TOTAL CAJAS */
 
-.tabla-estibas td {
-    text-align: center !important;
-    vertical-align: middle;
-    padding: 6px 8px;
-}
-
-/* Destacar ligeramente el total */
 .tabla-estibas .fila-total td {
     background: #eaf0f8 !important;
     color: #1a4d8f;
     font-weight: 700;
     border-top: 2px solid #9bb6d5;
     padding: 8px;
-    font-size: 10px;
 }
 
 .tabla-estibas .fila-total td:last-child {
-    font-size: 12px;
+    font-size: 11pt;
 }
 
+/* CUADRICULA DE FOTOGRAFIAS */
 
 .tabla-fotos {
     width: 100%;
     table-layout: fixed;
     border-collapse: separate;
-    border-spacing: 10px 12px;
-    margin: 0 auto 12px auto;
-    page-break-inside: avoid;
-    break-inside: avoid;
+    border-spacing: 7px 7px;
+    margin: 0 auto 8px auto;
+
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
 }
 
-.tabla-fotos tr {
-    page-break-inside: avoid;
-    break-inside: avoid;
+.tabla-fotos tbody,
+.tabla-fotos tr,
+.tabla-fotos td {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
 }
 
 .tabla-fotos td {
     width: 50%;
-    padding: 5px;
+    padding: 3px;
     text-align: center;
-    vertical-align: top;
-    page-break-inside: avoid;
-    break-inside: avoid;
+    vertical-align: middle;
 }
+
+/* FOTOGRAFIAS NORMALES: 4 POR PAGINA */
 
 .contenedor-img {
     width: 100%;
-    height: 7.2cm;
+    height: 7.0cm;
+
     display: flex;
     align-items: center;
     justify-content: center;
+
     overflow: hidden;
+    border: 1px solid #d0d7de;
+    border-radius: 4px;
+    background: #fafafa;
 }
 
 .contenedor-img img {
     display: block;
     max-width: 100%;
-    max-height: 7.2cm;
+    max-height: 6.8cm;
     width: auto;
     height: auto;
     object-fit: contain;
+    object-position: center;
     margin: 0 auto;
 }
+
+/* FOTOGRAFIA INDIVIDUAL */
+
+.tabla-fotos.tabla-single .contenedor-img.single {
+    height: 14.5cm;
+}
+
+.tabla-fotos.tabla-single .contenedor-img.single img {
+    max-height: 14.2cm;
+}
+
+/* CELDA VACIA */
+
+.celda-vacia {
+    border: none !important;
+    background: transparent !important;
+}
+
+/* PIE DE FOTOGRAFIA */
 
 .pie-foto {
     text-align: center;
     font-size: 8pt;
     color: #526174;
     overflow-wrap: anywhere;
-    margin-top: 5px;
+    margin-top: 4px;
 }
 
+/* CONTROL DE PAGINACION */
 
 table {
     page-break-inside: auto;
+}
+
+.tabla-fotos,
+.tabla-estibas {
+    page-break-inside: avoid !important;
 }
 
 thead {
@@ -238,417 +350,193 @@ tr {
     break-inside: avoid;
 }
 
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      font-size: 10px;
-      color: #2c3e50;
-      line-height: 1.3;
-    }
-
-    /* ================== ENCABEZADO ================== */
-    .encabezado {
-      width: 100%;
-      border-bottom: 3px solid #1a4d8f;
-      padding-bottom: 8px;
-      margin-bottom: 8px;
-    }
-
-    .encabezado td { vertical-align: middle; }
-
-    .logo-box-izq,
-    .logo-box-der {
-      width: 130px;
-      height: 110px;
-      vertical-align: middle;
-    }
-
-    .logo-box-izq { text-align: left; }
-    .logo-box-der { text-align: right; }
-
-    .logo-box-izq img,
-    .logo-box-der img {
-      height: 100px;
-      width: auto;
-      max-width: 130px;
-      object-fit: contain;
-      display: inline-block;
-      vertical-align: middle;
-    }
-
-    .titulo-box { text-align: center; padding: 0 10px; }
-
-    .empresa {
-      font-size: 9px;
-      font-weight: 600;
-      color: #1a4d8f;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-    }
-
-    .titulo-box h1 {
-      font-size: 14px;
-      color: #1a4d8f;
-      margin: 1px 0;
-      letter-spacing: 0.3px;
-    }
-
-    .nro-doc {
-      font-size: 9px;
-      font-weight: 700;
-      color: #e74c3c;
-    }
-
-    /* ================== DATOS ================== */
-    .banda-estado {
-      background: #f2f6fb;
-      border-left: 3px solid #1a4d8f;
-      padding: 4px 8px;
-      margin: 5px 0;
-      font-size: 8.5px;
-    }
-
-    .banda-estado .etiqueta { font-weight: 700; color: #1a4d8f; }
-    .banda-estado .separador { color: #ccc; margin: 0 6px; }
-
-    .tabla-datos {
-      width: 100%;
-      border-collapse: collapse;
-      border: 1px solid #d0d7de;
-      margin-bottom: 8px;
-    }
-
-    .tabla-datos td {
-      padding: 4px 7px;
-      border: 1px solid #d0d7de;
-      vertical-align: top;
-      font-size: 9px;
-    }
-
-    .etiqueta-campo {
-      width: 15%;
-      background: #f2f6fb;
-      font-weight: 600;
-      color: #1a4d8f;
-      text-transform: uppercase;
-    }
-
-    .valor-campo { width: 35%; }
-
-    .subtitulo {
-      background: #e8f0fa;
-      color: #1a4d8f;
-      font-weight: 700;
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 4px 7px;
-      border: 1px solid #d0d7de;
-      border-bottom: none;
-    }
-
-    /* ================== SECCIONES DE FOTOS ================== */
-    .salto-pagina {
-      /* Un único salto ANTES del siguiente bloque: evita páginas vacías. */
-      display: block;
-      clear: both;
-      page-break-before: always;
-      break-before: page;
-      page-break-after: auto;
-      break-after: auto;
-      height: 0;
-      margin: 0;
-      padding: 0;
-    }
-
-    .titulo-categoria {
-      background: #1a4d8f;
-      color: #ffffff;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      padding: 6px 10px;
-      margin: 10px 0 8px 0;
-      border-radius: 3px;
-      page-break-after: avoid;
-      break-after: avoid;
-    }
-
-    .tabla-fotos {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 0 0 8px 0;
-      page-break-inside: auto;
-      break-inside: auto;
-    }
-
-    .tabla-fotos tr {
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }
-
-    .tabla-fotos.tabla-single {
-      width: 100%;
-    }
-
-    .celda-foto {
-      vertical-align: top;
-      text-align: center;
-      padding: 4px;
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }
-
-    .contenedor-img {
-      width: 100%;
-      overflow: hidden;
-      border: 1px solid #d0d7de;
-      border-radius: 4px;
-      background: #fafafa;
-    }
-
-    .contenedor-img img {
-      display: block;
-      width: auto;
-      max-width: 100%;
-      max-height: 95mm;
-      height: auto;
-      object-fit: contain;
-      margin: 0 auto;
-    }
-
-
-/* Fotografías que ocupan una página individual */
-    .contenedor-img.single {
-      width: 100%;
-      height: 150mm;
-      max-height: 150mm;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      padding: 5px;
-      box-sizing: border-box;
-    }
-
-    .contenedor-img.single img {
-      display: block;
-      max-width: 100%;
-      max-height: 145mm;
-      width: auto;
-      height: auto;
-      object-fit: contain;
-      object-position: center;
-      margin: 0 auto;
-    }
-
-
-    .contenedor-img.ancha img {
-      max-height: 130mm;
-    }
-
-    .pie-foto {
-      font-size: 8px;
-      color: #555;
-      margin-top: 3px;
-      word-break: break-all;
-    }
-
-    /* ================== TABLA ESTIBAS ================== */
-    .tabla-estibas {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 0 0 10px 0;
-      page-break-inside: auto;
-      break-inside: auto;
-    }
-
-    .tabla-estibas th {
-      background: #1a4d8f;
-      color: #ffffff;
-      font-size: 9px;
-      font-weight: 700;
-      padding: 5px 7px;
-      border: 1px solid #1a4d8f;
-      text-align: left;
-    }
-
-    .tabla-estibas td {
-      padding: 4px 7px;
-      border: 1px solid #d0d7de;
-      font-size: 9px;
-    }
-
-    .tabla-estibas tr:nth-child(even) td {
-      background: #f7faff;
-    }
-
-/* ==========================================
-   AJUSTE DEFINITIVO DE DISTRIBUCIÓN DE FOTOS
-   ========================================== */
-
-    /* Mantener las cuadrículas completas en una página */
-    .tabla-fotos {
-        width: 100%;
-        table-layout: fixed;
-        border-collapse: collapse;
-        margin: 0 auto 8px auto;
-    
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
-    }
-    
-    .tabla-fotos tr {
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
-    }
-    
-    .tabla-fotos td {
-        width: 50%;
-        padding: 4px;
-        vertical-align: middle;
-        text-align: center;
-    
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
-    }
-    
-    /* Fotografías normales: permite cuatro por página */
-    .tabla-fotos .contenedor-img {
-        width: 100%;
-        height: 72mm;
-        max-height: 72mm;
-    
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    
-        overflow: hidden;
-        box-sizing: border-box;
-    }
-    
-    /* Mantener la fotografía completa y proporcional */
-    .tabla-fotos .contenedor-img img {
-        display: block;
-        max-width: 100%;
-        max-height: 68mm;
-        width: auto;
-        height: auto;
-        object-fit: contain;
-        object-position: center;
-        margin: 0 auto;
-    }
-    
-    /* Fotografías individuales */
-    .tabla-fotos.tabla-single .contenedor-img.single {
-        height: 145mm;
-        max-height: 145mm;
-    }
-    
-    .tabla-fotos.tabla-single .contenedor-img.single img {
-        max-width: 100%;
-        max-height: 140mm;
-        object-fit: contain;
-    }
-    
-    /* Fotografías que ocupan el ancho completo */
-    .tabla-fotos .contenedor-img.ancha {
-        height: 100mm;
-        max-height: 100mm;
-    }
-    
-    .tabla-fotos .contenedor-img.ancha img {
-        max-width: 100%;
-        max-height: 95mm;
-        object-fit: contain;
-    }
-    
-    /* Evitar cortes en los pies de fotografía */
-    .tabla-fotos .pie-foto {
-        text-align: center;
-        font-size: 8px;
-        margin-top: 4px;
-        overflow-wrap: anywhere;
-    }
-
-  </style>
+</style>
 </head>
 
+<body>
+
+<!-- ENCABEZADO REPETIDO -->
+
 <div class="encabezado-repetido">
-  <table class="logos">
-    <tr>
-      <td class="logo-izquierdo">
-        {{logo_izq_html_grande}}
-      </td>
-      <td class="texto-encabezado">
-        AUSTRALIS MAR SA
-      </td>
-      <td class="logo-derecho">
-        {{logo_der_html_grande}}
-      </td>
-    </tr>
-  </table>
+
+    <table class="logos">
+
+        <tr>
+
+            <td class="logo-izquierdo">
+                {{logo_izq_html_grande}}
+            </td>
+
+            <td class="texto-encabezado">
+                AUSTRALIS MAR SA
+            </td>
+
+            <td class="logo-derecho">
+                {{logo_der_html_grande}}
+            </td>
+
+        </tr>
+
+    </table>
+
 </div>
 
-<!-- TITULO PRINCIPAL DEL INFORME -->
+<!-- TITULO SEGUN TIPO DE OPERACION -->
+
 <div class="titulo-informe">
     {{titulo_informe}}
 </div>
 
-  <div class="banda-estado">
-    <span class="etiqueta">FECHA:</span> {{fecha}}
+<!-- FECHA Y DOCUMENTACION -->
+
+<div class="banda-estado">
+
+    <span class="etiqueta">FECHA:</span>
+    {{fecha}}
+
     <span class="separador">|</span>
-    <span class="etiqueta">N° ENTREGA:</span> {{nro_entrega}}
+
+    <span class="etiqueta">N° ENTREGA:</span>
+    {{nro_entrega}}
+
     <span class="separador">|</span>
-    <span class="etiqueta">GUÍA DESPACHO:</span> {{guia_despacho}}
-  </div>
 
-  <table class="tabla-datos">
-    <tr>
-      <td class="etiqueta-campo">Cliente / Destino</td>
-      <td class="valor-campo">{{cliente}}</td>
-      <td class="etiqueta-campo">Origen</td>
-      <td class="valor-campo">{{origen}}</td>
-    </tr>
-    <tr>
-      <td class="etiqueta-campo">N° Pedido</td>
-      <td class="valor-campo">{{nro_pedido_display}}</td>
-      <td class="etiqueta-campo">Tipo</td>
-      <td class="valor-campo">{{tipo_informe}}</td>
-    </tr>
-  </table>
+    <span class="etiqueta">GUÍA DESPACHO:</span>
+    {{guia_despacho}}
 
-  <div class="subtitulo">🚛 Datos del transporte</div>
-  <table class="tabla-datos" style="margin-bottom: 12px;">
-    <tr>
-      <td class="etiqueta-campo">Transporte</td>
-      <td class="valor-campo">{{transporte}}</td>
-      <td class="etiqueta-campo">Chofer</td>
-      <td class="valor-campo">{{chofer}}</td>
-    </tr>
-    <tr>
-      <td class="etiqueta-campo">Patente Camión</td>
-      <td class="valor-campo">{{patente_camion}}</td>
-      <td class="etiqueta-campo">Patente Rampla</td>
-      <td class="valor-campo">{{patente_rampla}}</td>
-    </tr>
-    <tr>
-      <td class="etiqueta-campo">Sello Final</td>
-      <td class="valor-campo">{{sello_final}}</td>
-      <td class="etiqueta-campo">Sellos Provisorios</td>
-      <td class="valor-campo">{{sellos_provisorios}}</td>
-    </tr>
-    <tr>
-      <td class="etiqueta-campo">N° Termógrafo</td>
-      <td class="valor-campo" colspan="3">{{nro_termografo}}</td>
-    </tr>
-  </table>
+</div>
 
-  <!-- 🔥 AQUÍ VAN TODAS LAS SECCIONES DE FOTOS -->
-  {{secciones}}
+<!-- DATOS GENERALES -->
+
+<table class="tabla-datos">
+
+    <tr>
+
+        <td class="etiqueta-campo">
+            Cliente / Destino
+        </td>
+
+        <td class="valor-campo">
+            {{cliente}}
+        </td>
+
+        <td class="etiqueta-campo">
+            Origen
+        </td>
+
+        <td class="valor-campo">
+            {{origen}}
+        </td>
+
+    </tr>
+
+    <tr>
+
+        <td class="etiqueta-campo">
+            N° Pedido
+        </td>
+
+        <td class="valor-campo">
+            {{nro_pedido_display}}
+        </td>
+
+        <td class="etiqueta-campo">
+            Tipo
+        </td>
+
+        <td class="valor-campo">
+            {{tipo_informe}}
+        </td>
+
+    </tr>
+
+</table>
+
+<!-- TRANSPORTE -->
+
+<div class="subtitulo">
+    🚛 Datos del transporte
+</div>
+
+<table class="tabla-datos" style="margin-bottom: 12px;">
+
+    <tr>
+
+        <td class="etiqueta-campo">
+            Transporte
+        </td>
+
+        <td class="valor-campo">
+            {{transporte}}
+        </td>
+
+        <td class="etiqueta-campo">
+            Chofer
+        </td>
+
+        <td class="valor-campo">
+            {{chofer}}
+        </td>
+
+    </tr>
+
+    <tr>
+
+        <td class="etiqueta-campo">
+            Patente Camión
+        </td>
+
+        <td class="valor-campo">
+            {{patente_camion}}
+        </td>
+
+        <td class="etiqueta-campo">
+            Patente Rampla
+        </td>
+
+        <td class="valor-campo">
+            {{patente_rampla}}
+        </td>
+
+    </tr>
+
+    <tr>
+
+        <td class="etiqueta-campo">
+            Sello Final
+        </td>
+
+        <td class="valor-campo">
+            {{sello_final}}
+        </td>
+
+        <td class="etiqueta-campo">
+            Sellos Provisorios
+        </td>
+
+        <td class="valor-campo">
+            {{sellos_provisorios}}
+        </td>
+
+    </tr>
+
+    <tr>
+
+        <td class="etiqueta-campo">
+            N° Termógrafo
+        </td>
+
+        <td class="valor-campo" colspan="3">
+            {{nro_termografo}}
+        </td>
+
+    </tr>
+
+</table>
+
+<!-- TODAS LAS SECCIONES FOTOGRAFICAS -->
+
+{{secciones}}
 
 </body>
 </html>
