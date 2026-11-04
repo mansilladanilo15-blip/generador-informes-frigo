@@ -132,6 +132,46 @@ body {
     color: white;
     font-weight: bold;
 }
+    
+/* ==========================================
+   TABLA RESUMEN DE ESTIBAS
+   ========================================== */
+
+.tabla-estibas {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.tabla-estibas th {
+    text-align: center !important;
+    vertical-align: middle;
+    font-weight: 700;
+    color: #1a365d;
+    background: #eaf0f8;
+    padding: 7px;
+}
+
+.tabla-estibas td {
+    text-align: center !important;
+    vertical-align: middle;
+    padding: 6px 8px;
+}
+
+/* Destacar ligeramente el total */
+.tabla-estibas .fila-total td {
+    background: #eaf0f8 !important;
+    color: #1a4d8f;
+    font-weight: 700;
+    border-top: 2px solid #9bb6d5;
+    padding: 8px;
+    font-size: 10px;
+}
+
+.tabla-estibas .fila-total td:last-child {
+    font-size: 12px;
+}
+
 
 .tabla-fotos {
     width: 100%;
