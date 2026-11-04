@@ -255,6 +255,65 @@ def campo_transporte(
 
     return valor_actual
 
+def campo_transporte_en_linea(prefijo, valor_actual="", disabled=False):
+    """
+    Muestra el selector de transportes registrados
+    y el campo para agregar uno nuevo en una misma fila.
+    """
+
+    transportes = obtener_transportes_registrados()
+
+    valor_actual = str(valor_actual or "").strip()
+
+    if (
+        valor_actual
+        and valor_actual.lower() not in ("-", "no asignado")
+        and valor_actual.casefold() not in [x.casefold() for x in transportes]
+    ):
+        transportes.append(valor_actual)
+
+    transportes = sorted(transportes, key=lambda x: x.casefold())
+
+    opciones = [""] + transportes
+
+    indice = 0
+
+    for i, opcion in enumerate(opciones):
+        if opcion and opcion.casefold() == valor_actual.casefold():
+            indice = i
+            break
+
+    col_transporte, col_nuevo = st.columns([1.3, 1])
+
+    with col_transporte:
+        seleccionado = st.selectbox(
+            "Transporte registrado",
+            options=opciones,
+            index=indice,
+            format_func=lambda x: (
+                "Seleccionar..." if x == "" else x
+            ),
+            key=f"{prefijo}_transporte_existente",
+            disabled=disabled
+        )
+
+    with col_nuevo:
+        nuevo = st.text_input(
+            "Agregar transporte",
+            value="",
+            placeholder="Nuevo transporte",
+            key=f"{prefijo}_transporte_nuevo",
+            disabled=disabled
+        )
+
+    if nuevo.strip():
+        return nuevo.strip()
+
+    if seleccionado.strip():
+        return seleccionado.strip()
+
+    return valor_actual
+
 
 def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
     if not seleccion:
@@ -660,45 +719,46 @@ with st.form("datos"):
     
     t1, t2 = st.columns(2)
     
-    with t1:
-    
-        transporte = campo_transporte(
-            prefijo=f"informe_{pedido_actual or 'nuevo'}",
-            valor_actual=val("transporte", ""),
-            disabled=bloqueado
-        )
-    
-        patente_camion = st.text_input(
-            "Patente Camión",
-            value=val("patente_camion", ""),
-            disabled=bloqueado
-        )
-    
-        sello_final = st.text_input(
-            "Sello Final",
-            value=val("sello_final", ""),
-            disabled=bloqueado
-        )
-    
-    with t2:
-    
-        chofer = st.text_input(
-            "Chofer",
-            value=val("chofer", ""),
-            disabled=bloqueado
-        )
-    
-        patente_rampla = st.text_input(
-            "Patente Rampla",
-            value=val("patente_rampla", ""),
-            disabled=bloqueado
-        )
-    
-        sellos_provisorios = st.text_input(
-            "Sellos Provisorios",
-            value=val("sellos_provisorios", ""),
-            disabled=bloqueado
-        )
+with t1:
+
+    transporte = campo_transporte_en_linea(
+        prefijo=f"informe_{pedido_actual or 'nuevo'}",
+        valor_actual=val("transporte", ""),
+        disabled=bloqueado
+    )
+
+    patente_camion = st.text_input(
+        "Patente Camión",
+        value=val("patente_camion", ""),
+        disabled=bloqueado
+    )
+
+    sello_final = st.text_input(
+        "Sello Final",
+        value=val("sello_final", ""),
+        disabled=bloqueado
+    )
+
+
+with t2:
+
+    chofer = st.text_input(
+        "Chofer",
+        value=val("chofer", ""),
+        disabled=bloqueado
+    )
+
+    patente_rampla = st.text_input(
+        "Patente Rampla",
+        value=val("patente_rampla", ""),
+        disabled=bloqueado
+    )
+
+    sellos_provisorios = st.text_input(
+        "Sellos Provisorios",
+        value=val("sellos_provisorios", ""),
+        disabled=bloqueado
+    )
     
     nro_termografo = st.text_input(
         "N° Termógrafo",
