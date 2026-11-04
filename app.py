@@ -656,67 +656,67 @@ with st.form("datos"):
         guia_despacho = st.text_input("Guía Despacho", value=val("guia_despacho", ""), disabled=bloqueado)
 
 
-st.subheader("🚛 Transporte")
-
-t1, t2 = st.columns(2)
-
-with t1:
-
-    transporte = campo_transporte(
-        prefijo=f"informe_{pedido_actual or 'nuevo'}",
-        valor_actual=val("transporte", ""),
+    st.subheader("🚛 Transporte")
+    
+    t1, t2 = st.columns(2)
+    
+    with t1:
+    
+        transporte = campo_transporte(
+            prefijo=f"informe_{pedido_actual or 'nuevo'}",
+            valor_actual=val("transporte", ""),
+            disabled=bloqueado
+        )
+    
+        patente_camion = st.text_input(
+            "Patente Camión",
+            value=val("patente_camion", ""),
+            disabled=bloqueado
+        )
+    
+        sello_final = st.text_input(
+            "Sello Final",
+            value=val("sello_final", ""),
+            disabled=bloqueado
+        )
+    
+    with t2:
+    
+        chofer = st.text_input(
+            "Chofer",
+            value=val("chofer", ""),
+            disabled=bloqueado
+        )
+    
+        patente_rampla = st.text_input(
+            "Patente Rampla",
+            value=val("patente_rampla", ""),
+            disabled=bloqueado
+        )
+    
+        sellos_provisorios = st.text_input(
+            "Sellos Provisorios",
+            value=val("sellos_provisorios", ""),
+            disabled=bloqueado
+        )
+    
+    nro_termografo = st.text_input(
+        "N° Termógrafo",
+        value=val("nro_termografo", ""),
         disabled=bloqueado
     )
-
-    patente_camion = st.text_input(
-        "Patente Camión",
-        value=val("patente_camion", ""),
-        disabled=bloqueado
-    )
-
-    sello_final = st.text_input(
-        "Sello Final",
-        value=val("sello_final", ""),
-        disabled=bloqueado
-    )
-
-with t2:
-
-    chofer = st.text_input(
-        "Chofer",
-        value=val("chofer", ""),
-        disabled=bloqueado
-    )
-
-    patente_rampla = st.text_input(
-        "Patente Rampla",
-        value=val("patente_rampla", ""),
-        disabled=bloqueado
-    )
-
-    sellos_provisorios = st.text_input(
-        "Sellos Provisorios",
-        value=val("sellos_provisorios", ""),
-        disabled=bloqueado
-    )
-
-nro_termografo = st.text_input(
-    "N° Termógrafo",
-    value=val("nro_termografo", ""),
-    disabled=bloqueado
-)
-
-
-    if not bloqueado:
-        if st.form_submit_button("💾 Guardar datos", width="stretch"):
-            if pedido_actual:
-                pedidos = nube.obtener_pedidos_nube()
-                for p in pedidos:
-                    if p['id'] == pedido_actual:
-                        p.update({"nro_entrega": nro_entrega, "transporte": transporte, "cliente": cliente, "nro_pedido": nro_pedido, "fecha": fecha.strftime("%Y-%m-%d"), "guia_despacho": guia_despacho, "chofer": chofer, "patente_camion": patente_camion, "patente_rampla": patente_rampla, "sello_final": sello_final, "sellos_provisorios": sellos_provisorios, "nro_termografo": nro_termografo})
-                        nube.subir_pedido_nube(pedido_actual, p)
-                        st.success("Guardado.")
-                        st.rerun()
+    
+    
+        if not bloqueado:
+            if st.form_submit_button("💾 Guardar datos", width="stretch"):
+                if pedido_actual:
+                    pedidos = nube.obtener_pedidos_nube()
+                    for p in pedidos:
+                        if p['id'] == pedido_actual:
+                            p.update({"nro_entrega": nro_entrega, "transporte": transporte, "cliente": cliente, "nro_pedido": nro_pedido, "fecha": fecha.strftime("%Y-%m-%d"), "guia_despacho": guia_despacho, "chofer": chofer, "patente_camion": patente_camion, "patente_rampla": patente_rampla, "sello_final": sello_final, "sellos_provisorios": sellos_provisorios, "nro_termografo": nro_termografo})
+                            nube.subir_pedido_nube(pedido_actual, p)
+                            st.success("Guardado.")
+                            st.rerun()
 
 st.subheader("📷 Fotos")
 if pedido_actual:
