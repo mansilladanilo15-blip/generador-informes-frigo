@@ -322,6 +322,7 @@ def construir_grid_fotos(lista_fotos, tamano_foto=1200):
     return html
 
 
+
 def construir_tabla_estibas(filas):
     if not filas:
         return ""
@@ -331,8 +332,8 @@ def construir_tabla_estibas(filas):
       <thead>
         <tr>
           <th style="width:20%;">N°</th>
-          <th style="width:50%;">Producto</th>
-          <th style="width:30%;">Cantidad</th>
+          <th style="width:50%;">PATA</th>
+          <th style="width:30%;">CANTIDAD</th>
         </tr>
       </thead>
       <tbody>
@@ -341,6 +342,7 @@ def construir_tabla_estibas(filas):
     total = 0
 
     for i, f in enumerate(filas, start=1):
+
         cantidad = f.get("cantidad", "")
         pata = f.get("pata", i)
 
@@ -367,16 +369,19 @@ def construir_tabla_estibas(filas):
         '''
 
     html += f'''
-    <tr style="background: #1a4d8f; color: white; font-weight: bold;">
-      <td colspan="2"
-          style="text-align: right; padding-right: 15px; font-size: 11px;">
-          TOTAL CAJAS:
+    <tr class="fila-total">
+      <td colspan="2">
+          TOTAL CAJAS
       </td>
-      <td style="text-align: center; font-size: 12px;">{total}</td>
+      <td><strong>{total}</strong></td>
     </tr>
     '''
 
-    html += '</tbody></table>'
+    html += '''
+      </tbody>
+    </table>
+    '''
+
     return html
 
 
@@ -418,12 +423,14 @@ def generar_informe(datos, fotos_por_categoria, filas_estibas=None):
 
     fecha_gen = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-    tipo = datos.get("tipo_informe", "").lower()
 
+    tipo = str(datos.get("tipo_informe", "")).strip().lower()
+    
     if "traslado" in tipo:
-        titulo_informe = "REPORTE FOTOGRÁFICO CONGELADO"
+        titulo_informe = "REPORTE FOTOGRAFICO CONGELADO"
     else:
-        titulo_informe = "REPORTE FOTOGRÁFICO FRESCO"
+        titulo_informe = "REPORTE FOTOGRAFICO FRESCO"
+
 
     secciones = []
 
