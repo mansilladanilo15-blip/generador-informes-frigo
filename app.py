@@ -126,6 +126,135 @@ def val(key, default=""):
     ultimo_cargado = st.session_state.get("cargar_ultimo", {})
     v = ultimo_cargado.get(key, default)
     return default if v == "-" or v is None else v
+    
+def obtener_transportes_registrados():
+    """
+    Recupera los transportes utilizados en los pedidos
+    guardados en Supabase y elimina los duplicados.
+    """
+
+    transportes = {}
+
+    try:
+        pedidos = nube.obtener_pedidos_nube()
+
+        for pedido in pedidos:
+
+            nombre = str(
+                pedido.get("transporte", "")
+            ).strip()
+
+            if not nombre:
+                continue
+
+            if nombre.lower() in (
+                "-", "no asignado", "ninguno", "n/a"
+            ):
+                continue
+
+            # Evitar duplicados aunque cambien
+            # las mayúsculas o minúsculas.
+            clave = nombre.casefold()
+
+            if clave not in transportes:
+                transportes[clave] = nombre
+
+    except Exception as e:
+
+        st.warning(
+            f"No se pudo consultar el registro de transportes: {e}"
+        )
+
+    return sorted(
+        transportes.values(),
+        key=lambda x: x.casefold()
+    )
+
+
+def campo_transporte(
+    prefijo,
+    valor_actual="",
+    disabled=False
+):
+    """
+    Permite seleccionar un transporte registrado
+    o ingresar uno nuevo.
+
+    El nuevo transporte queda registrado cuando
+    se guarda el pedido en Supabase.
+    """
+
+    transportes = obtener_transportes_registrados()
+
+    valor_actual = str(
+        valor_actual or ""
+    ).strip()
+
+    # Incluir el transporte actual aunque todavía
+    # no aparezca en el historial.
+    if (
+        valor_actual
+        and valor_actual.lower() not in (
+            "-", "no asignado"
+        )
+        and valor_actual.casefold() not in [
+            x.casefold() for x in transportes
+        ]
+    ):
+        transportes.append(valor_actual)
+
+    transportes = sorted(
+        transportes,
+        key=lambda x: x.casefold()
+    )
+
+    opciones = [""] + transportes
+
+    try:
+        indice = next(
+            i for i, opcion in enumerate(opciones)
+            if opcion.casefold() == valor_actual.casefold()
+            and opcion != ""
+        )
+    except StopIteration:
+        indice = 0
+
+    st.caption(
+        "Selecciona un transporte registrado o ingresa uno nuevo."
+    )
+
+    seleccionado = st.selectbox(
+        "Transportes registrados",
+        options=opciones,
+        index=indice,
+        format_func=lambda x: (
+            "Seleccionar transporte..."
+            if x == ""
+            else x
+        ),
+        key=f"{prefijo}_transporte_existente",
+        disabled=disabled
+    )
+
+    nuevo = st.text_input(
+        "Agregar transporte nuevo",
+        value="",
+        placeholder="Escribe el nombre del transporte",
+        key=f"{prefijo}_transporte_nuevo",
+        disabled=disabled
+    )
+
+    # Si se escribe uno nuevo, tiene prioridad.
+    # De lo contrario se utiliza el seleccionado.
+
+    if nuevo.strip():
+        return nuevo.strip()
+
+    if seleccionado.strip():
+        return seleccionado.strip()
+
+    return valor_actual
+
 
 def borrar_fotos_seleccionadas(pedido_id, df, seleccion):
     if not seleccion:
@@ -400,7 +529,10 @@ def mostrar_gestion_pedidos():
                 nuevo_nro = st.text_input("N° de Entrega *")
                 nuevo_destino = st.text_input("Destino *")
             with col2:
-                nuevo_transporte = st.text_input("Transporte (Opcional)")
+                nuevo_transporte = campo_transporte(
+                    prefijo="crear_pedido",
+                    valor_actual=""
+                )
         else:
             with col1:
                 nuevo_nro = st.text_input("N° Pedido *")
@@ -523,17 +655,57 @@ with st.form("datos"):
         nro_entrega = st.text_input("N° Entrega", value=val("nro_entrega", ""), disabled=bloqueado)
         guia_despacho = st.text_input("Guía Despacho", value=val("guia_despacho", ""), disabled=bloqueado)
 
-    st.subheader("🚛 Transporte")
-    t1, t2 = st.columns(2)
-    with t1:
-        transporte = st.text_input("Transporte", value=val("transporte", ""), disabled=bloqueado)
-        patente_camion = st.text_input("Patente Camión", value=val("patente_camion", ""), disabled=bloqueado)
-        sello_final = st.text_input("Sello Final", value=val("sello_final", ""), disabled=bloqueado)
-    with t2:
-        chofer = st.text_input("Chofer", value=val("chofer", ""), disabled=bloqueado)
-        patente_rampla = st.text_input("Patente Rampla", value=val("patente_rampla", ""), disabled=bloqueado)
-        sellos_provisorios = st.text_input("Sellos Provisorios", value=val("sellos_provisorios", ""), disabled=bloqueado)
-    nro_termografo = st.text_input("N° Termógrafo", value=val("nro_termografo", ""), disabled=bloqueado)
+
+st.subheader("🚛 Transporte")
+
+t1, t2 = st.columns(2)
+
+with t1:
+
+    transporte = campo_transporte(
+        prefijo=f"informe_{pedido_actual or 'nuevo'}",
+        valor_actual=val("transporte", ""),
+        disabled=bloqueado
+    )
+
+    patente_camion = st.text_input(
+        "Patente Camión",
+        value=val("patente_camion", ""),
+        disabled=bloqueado
+    )
+
+    sello_final = st.text_input(
+        "Sello Final",
+        value=val("sello_final", ""),
+        disabled=bloqueado
+    )
+
+with t2:
+
+    chofer = st.text_input(
+        "Chofer",
+        value=val("chofer", ""),
+        disabled=bloqueado
+    )
+
+    patente_rampla = st.text_input(
+        "Patente Rampla",
+        value=val("patente_rampla", ""),
+        disabled=bloqueado
+    )
+
+    sellos_provisorios = st.text_input(
+        "Sellos Provisorios",
+        value=val("sellos_provisorios", ""),
+        disabled=bloqueado
+    )
+
+nro_termografo = st.text_input(
+    "N° Termógrafo",
+    value=val("nro_termografo", ""),
+    disabled=bloqueado
+)
+
 
     if not bloqueado:
         if st.form_submit_button("💾 Guardar datos", width="stretch"):
