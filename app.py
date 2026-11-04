@@ -707,16 +707,16 @@ with st.form("datos"):
     )
     
     
-        if not bloqueado:
-            if st.form_submit_button("💾 Guardar datos", width="stretch"):
-                if pedido_actual:
-                    pedidos = nube.obtener_pedidos_nube()
-                    for p in pedidos:
-                        if p['id'] == pedido_actual:
-                            p.update({"nro_entrega": nro_entrega, "transporte": transporte, "cliente": cliente, "nro_pedido": nro_pedido, "fecha": fecha.strftime("%Y-%m-%d"), "guia_despacho": guia_despacho, "chofer": chofer, "patente_camion": patente_camion, "patente_rampla": patente_rampla, "sello_final": sello_final, "sellos_provisorios": sellos_provisorios, "nro_termografo": nro_termografo})
-                            nube.subir_pedido_nube(pedido_actual, p)
-                            st.success("Guardado.")
-                            st.rerun()
+    if not bloqueado:
+         if st.form_submit_button("💾 Guardar datos", width="stretch"):
+            if pedido_actual:
+                pedidos = nube.obtener_pedidos_nube()
+                for p in pedidos:
+                    if p['id'] == pedido_actual:
+                        p.update({"nro_entrega": nro_entrega, "transporte": transporte, "cliente": cliente, "nro_pedido": nro_pedido, "fecha": fecha.strftime("%Y-%m-%d"), "guia_despacho": guia_despacho, "chofer": chofer, "patente_camion": patente_camion, "patente_rampla": patente_rampla, "sello_final": sello_final, "sellos_provisorios": sellos_provisorios, "nro_termografo": nro_termografo})
+                        nube.subir_pedido_nube(pedido_actual, p)
+                        st.success("Guardado.")
+                        st.rerun()
 
 st.subheader("📷 Fotos")
 if pedido_actual:
