@@ -101,11 +101,23 @@ def subir_pedido_nube(pedido_id, datos):
 
 def obtener_fotos_nube_verificado(pedido_id, cliente=None):
     cliente = cliente or obtener_cliente()
-    archivos = cliente.storage.from_("fotos").list(str(pedido_id))
-    if archivos is None:
-        raise RuntimeError("Supabase no devolvió una lista de fotos válida.")
-    return [a["name"] for a in archivos if isinstance(a, dict) and isinstance(a.get("name"), str) and a["name"].lower().endswith(EXTENSIONES_FOTO)]
 
+    archivos = cliente.storage.from_("fotos").list(
+        str(pedido_id)
+    )
+
+    if archivos is None:
+        raise RuntimeError(
+            "Supabase no devolvió una lista de fotos válida."
+        )
+
+    return [
+        a["name"]
+        for a in archivos
+        if isinstance(a, dict)
+        and isinstance(a.get("name"), str)
+        and a["name"].lower().endswith(EXTENSIONES_FOTO)
+    ]
 
 def obtener_fotos_nube(pedido_id):
     """Lista fotos; los errores de conexión se propagan y no se disfrazan como lista vacía."""
@@ -189,26 +201,67 @@ def descargar_foto_nube(pedido_id, nombre_archivo):
 
 
 def borrar_foto_nube(pedido_id, nombre_archivo):
-    """Borra una foto usando permisos normales y confirma que desapareció."""
-    nombre_archivo = os.path.basename(str(nombre_archivo))
+    """
+    Elimina una fotografía de Supabase Storage y verifica
+    su desaparición con reintentos progresivos.
+    """
+
+    nombre_archivo = os.path.basename(
+        str(nombre_archivo)
+    )
+
+    pedido_id = str(pedido_id)
+
     cliente = obtener_cliente()
+
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
-    error_operacion = None
+
+    # 1. Ejecutar eliminación
     try:
-        cliente.storage.from_("fotos").remove([ruta_nube])
+        cliente.storage.from_("fotos").remove(
+            [ruta_nube]
+        )
+
     except Exception as exc:
-        error_operacion = exc
-    ultimo_error = error_operacion
-    for intento in range(INTENTOS_VERIFICACION):
+        raise RuntimeError(
+            f"Supabase no pudo ejecutar el borrado de "
+            f"'{nombre_archivo}': {exc}"
+        ) from exc
+
+    # 2. Verificar con esperas progresivas
+    esperas = [0.5, 1.0, 1.5, 2.0, 3.0]
+
+    ultimo_error = None
+
+    for espera in esperas:
+
+        time.sleep(espera)
+
         try:
-            if nombre_archivo not in obtener_fotos_nube_verificado(pedido_id):
+            # Crear una nueva consulta para evitar reutilizar
+            # información obtenida anteriormente.
+            cliente_verificacion = obtener_cliente()
+
+            archivos_actuales = obtener_fotos_nube_verificado(
+                pedido_id,
+                cliente=cliente_verificacion
+            )
+
+            if nombre_archivo not in archivos_actuales:
                 return True
-            ultimo_error = RuntimeError("La foto todavía aparece en Storage.")
+
+            ultimo_error = (
+                "La fotografía todavía aparece en Storage."
+            )
+
         except Exception as exc:
+
             ultimo_error = exc
-        if intento < INTENTOS_VERIFICACION - 1:
-            time.sleep(ESPERA_VERIFICACION)
-    raise RuntimeError(f"No se pudo confirmar el borrado de '{nombre_archivo}'. Detalle: {ultimo_error}")
+
+    raise RuntimeError(
+        f"No se pudo confirmar el borrado de "
+        f"'{nombre_archivo}'. Detalle: {ultimo_error}"
+    )
 
 
 def borrar_pedido_nube_admin(pedido_id):
