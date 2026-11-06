@@ -200,59 +200,7 @@ def descargar_foto_nube(pedido_id, nombre_archivo):
     return bytes(resultado)
 
 
-def borrar_foto_nube(pedido_id, nombre_archivo):
-    """
-    Diagnóstico de eliminación de fotografías en Supabase.
-    """
-
-    nombre_archivo = os.path.basename(str(nombre_archivo))
-    pedido_id = str(pedido_id)
-
-    cliente = obtener_cliente()
-    ruta_nube = f"{pedido_id}/{nombre_archivo}"
-
-    try:
-        resultado = cliente.storage.from_("fotos").remove(
-            [ruta_nube]
-        )
-
-        print("========== DIAGNOSTICO BORRADO ==========")
-        print("Pedido:", pedido_id)
-        print("Archivo:", nombre_archivo)
-        print("Ruta:", ruta_nube)
-        print("Respuesta REMOVE:", repr(resultado))
-
-    except Exception as exc:
-        raise RuntimeError(
-            f"ERROR EJECUTANDO REMOVE: {repr(exc)}"
-        ) from exc
-
-    esperas = [1, 2, 3, 4]
-
-    for espera in esperas:
-
-        time.sleep(espera)
-
-        try:
-            cliente_verificacion = obtener_cliente()
-
-            archivos = obtener_fotos_nube_verificado(
-                pedido_id,
-                cliente=cliente_verificacion
-            )
-
-            if nombre_archivo not in archivos:
-                print("BORRADO CONFIRMADO:", nombre_archivo)
-                return True
-
-        except Exception as exc:
-            print("ERROR VERIFICANDO:", repr(exc))
-
-    raise RuntimeError(
-        f"REMOVE ejecutado. Respuesta: {repr(resultado)}. "
-        f"La fotografía continúa apareciendo en Storage: "
-        f"{ruta_nube}"
-    )
+borrar_foto_nube
 
 def borrar_pedido_nube_admin(pedido_id):
     """Borrado completo: requiere sesión admin y usa service_role solo en servidor."""
