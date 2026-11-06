@@ -356,8 +356,10 @@ def borrar_foto_nube(pedido_id, nombre_archivo):
     """
     Elimina una fotografía del bucket fotos y verifica su desaparición.
 
-    Utiliza los permisos normales de la aplicación (clave anon).
-    No utiliza service_role.
+    En la aplicación PC, si existe una sesión administrativa autenticada,
+    utiliza service_role exclusivamente en el servidor.
+    En otros contextos conserva el cliente anon para no otorgar privilegios
+    administrativos a la aplicación móvil.
     """
 
     if not pedido_id:
@@ -375,40 +377,44 @@ def borrar_foto_nube(pedido_id, nombre_archivo):
         )
 
     pedido_id = str(pedido_id)
-
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
 
-    cliente = obtener_cliente()
+    # Solo la sesión PC autenticada como administrador puede usar service_role.
+    # Si no hay sesión admin, se mantiene el cliente anon.
+    es_admin = bool(
+        st.session_state.get("admin_autenticado", False)
+    )
 
-    # 1. Ejecutar el borrado en Storage.
+    cliente = (
+        _obtener_cliente_admin()
+        if es_admin
+        else obtener_cliente()
+    )
+
+    # 1. Ejecutar el borrado.
     try:
-
         resultado = cliente.storage.from_("fotos").remove(
             [ruta_nube]
         )
-
     except Exception as exc:
-
         raise RuntimeError(
             f"Supabase rechazó el borrado de '{nombre_archivo}'. "
             f"Detalle: {exc}"
         ) from exc
 
-    # 2. Verificar que la fotografía desapareció.
+    # 2. Verificar con el mismo cliente que realizó el borrado.
+    # Esto evita que una limitación de lectura de anon afecte la comprobación
+    # cuando el administrador está eliminando desde la aplicación PC.
     ultimo_error = None
 
     for intento in range(INTENTOS_VERIFICACION):
-
         if intento > 0:
             time.sleep(ESPERA_VERIFICACION * intento)
 
         try:
-
-            cliente_verificacion = obtener_cliente()
-
             archivos = obtener_fotos_nube_verificado(
                 pedido_id,
-                cliente=cliente_verificacion
+                cliente=cliente
             )
 
             if nombre_archivo not in archivos:
@@ -419,7 +425,6 @@ def borrar_foto_nube(pedido_id, nombre_archivo):
             )
 
         except Exception as exc:
-
             ultimo_error = exc
 
     raise RuntimeError(
