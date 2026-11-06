@@ -202,67 +202,57 @@ def descargar_foto_nube(pedido_id, nombre_archivo):
 
 def borrar_foto_nube(pedido_id, nombre_archivo):
     """
-    Elimina una fotografía de Supabase Storage y verifica
-    su desaparición con reintentos progresivos.
+    Diagnóstico de eliminación de fotografías en Supabase.
     """
 
-    nombre_archivo = os.path.basename(
-        str(nombre_archivo)
-    )
-
+    nombre_archivo = os.path.basename(str(nombre_archivo))
     pedido_id = str(pedido_id)
 
     cliente = obtener_cliente()
-
     ruta_nube = f"{pedido_id}/{nombre_archivo}"
 
-    # 1. Ejecutar eliminación
     try:
-        cliente.storage.from_("fotos").remove(
+        resultado = cliente.storage.from_("fotos").remove(
             [ruta_nube]
         )
 
+        print("========== DIAGNOSTICO BORRADO ==========")
+        print("Pedido:", pedido_id)
+        print("Archivo:", nombre_archivo)
+        print("Ruta:", ruta_nube)
+        print("Respuesta REMOVE:", repr(resultado))
+
     except Exception as exc:
         raise RuntimeError(
-            f"Supabase no pudo ejecutar el borrado de "
-            f"'{nombre_archivo}': {exc}"
+            f"ERROR EJECUTANDO REMOVE: {repr(exc)}"
         ) from exc
 
-    # 2. Verificar con esperas progresivas
-    esperas = [0.5, 1.0, 1.5, 2.0, 3.0]
-
-    ultimo_error = None
+    esperas = [1, 2, 3, 4]
 
     for espera in esperas:
 
         time.sleep(espera)
 
         try:
-            # Crear una nueva consulta para evitar reutilizar
-            # información obtenida anteriormente.
             cliente_verificacion = obtener_cliente()
 
-            archivos_actuales = obtener_fotos_nube_verificado(
+            archivos = obtener_fotos_nube_verificado(
                 pedido_id,
                 cliente=cliente_verificacion
             )
 
-            if nombre_archivo not in archivos_actuales:
+            if nombre_archivo not in archivos:
+                print("BORRADO CONFIRMADO:", nombre_archivo)
                 return True
 
-            ultimo_error = (
-                "La fotografía todavía aparece en Storage."
-            )
-
         except Exception as exc:
-
-            ultimo_error = exc
+            print("ERROR VERIFICANDO:", repr(exc))
 
     raise RuntimeError(
-        f"No se pudo confirmar el borrado de "
-        f"'{nombre_archivo}'. Detalle: {ultimo_error}"
+        f"REMOVE ejecutado. Respuesta: {repr(resultado)}. "
+        f"La fotografía continúa apareciendo en Storage: "
+        f"{ruta_nube}"
     )
-
 
 def borrar_pedido_nube_admin(pedido_id):
     """Borrado completo: requiere sesión admin y usa service_role solo en servidor."""
