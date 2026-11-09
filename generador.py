@@ -275,7 +275,7 @@ def generar_informe(datos, fotos_por_categoria, filas_estibas=None):
         )
         secciones.append(
             construir_seccion(
-                "6. Etiqueta",
+                "6. Etiquetas",
                 contenido,
                 salto_inicial=len(secciones) > 0
             )
