@@ -1062,8 +1062,90 @@ with st.sidebar:
             st.divider()
             st.markdown("**🟢 Finalizados**")
 
-            for p in finalizados:
-                boton_pedido(p, "🔒")
+            # Clasificar pedidos finalizados por semana ISO y año.
+            # Se utiliza primero la fecha del pedido y, si no existe,
+            # la fecha de creación como respaldo.
+            def clave_semana_pedido(p):
+                valor_fecha = p.get("fecha") or p.get("fecha_creacion")
+
+                try:
+                    if isinstance(valor_fecha, datetime):
+                        fecha_pedido = valor_fecha.date()
+                    elif isinstance(valor_fecha, date):
+                        fecha_pedido = valor_fecha
+                    else:
+                        fecha_pedido = date.fromisoformat(
+                            str(valor_fecha).strip()[:10]
+                        )
+
+                    iso = fecha_pedido.isocalendar()
+                    return (iso.year, iso.week)
+                except (TypeError, ValueError):
+                    return None
+
+            pedidos_por_semana = {}
+            for pedido_finalizado in finalizados:
+                clave = clave_semana_pedido(pedido_finalizado)
+                pedidos_por_semana.setdefault(clave, []).append(
+                    pedido_finalizado
+                )
+
+            semanas_ordenadas = sorted(
+                [k for k in pedidos_por_semana if k is not None],
+                reverse=True
+            )
+
+            opciones_semana = ["Todas las semanas"]
+            claves_por_opcion = {"Todas las semanas": "todas"}
+
+            for anio_semana, numero_semana in semanas_ordenadas:
+                etiqueta = (
+                    f"Semana {numero_semana:02d} - {anio_semana} "
+                    f"({len(pedidos_por_semana[(anio_semana, numero_semana)])})"
+                )
+                opciones_semana.append(etiqueta)
+                claves_por_opcion[etiqueta] = (anio_semana, numero_semana)
+
+            if None in pedidos_por_semana:
+                etiqueta_sin_fecha = (
+                    f"Sin fecha ({len(pedidos_por_semana[None])})"
+                )
+                opciones_semana.append(etiqueta_sin_fecha)
+                claves_por_opcion[etiqueta_sin_fecha] = None
+
+            semana_actual = date.today().isocalendar()
+            clave_actual = (semana_actual.year, semana_actual.week)
+            indice_inicial = 0
+
+            for indice, opcion in enumerate(opciones_semana):
+                if claves_por_opcion[opcion] == clave_actual:
+                    indice_inicial = indice
+                    break
+            else:
+                if len(opciones_semana) > 1:
+                    indice_inicial = 1
+
+            filtro_semana = st.selectbox(
+                "📅 Filtrar por semana",
+                opciones_semana,
+                index=indice_inicial,
+                key="filtro_semana_pedidos_finalizados"
+            )
+
+            clave_seleccionada = claves_por_opcion[filtro_semana]
+
+            if clave_seleccionada == "todas":
+                finalizados_filtrados = finalizados
+            else:
+                finalizados_filtrados = pedidos_por_semana.get(
+                    clave_seleccionada, []
+                )
+
+            if finalizados_filtrados:
+                for p in finalizados_filtrados:
+                    boton_pedido(p, "🔒")
+            else:
+                st.caption("No hay pedidos finalizados para esta semana.")
 
     st.divider()
 
