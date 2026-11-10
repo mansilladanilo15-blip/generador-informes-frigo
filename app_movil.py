@@ -294,54 +294,39 @@ if pedido:
         st.stop()
 
 
+
     if pedido.get("tipo") == "Traslado":
 
-        titulo_cartel = (
-            f"🚚 Traslado: "
-            f"{pedido.get('nro_entrega', pedido['nro_pedido'])}"
-        )
-
-        subtitulo_cartel = f"Destino: {pedido['cliente']}"
+        titulo_cartel = f"🚚 Traslado: {pedido.get('nro_entrega', pedido['nro_pedido'])}"
+        subtitulo_cartel = f"Destino: {pedido.get('cliente', '-')}"
 
     else:
 
         titulo_cartel = f"📦 Pedido: {pedido['nro_pedido']}"
 
-        subtitulo_cartel = (
-            f"Entrega: {pedido.get('nro_entrega', '-')} "
-            f"| Cliente: {pedido['cliente']}"
+        nro_entrega = pedido.get("nro_entrega")
+
+        if nro_entrega and str(nro_entrega).strip() not in ("", "-"):
+            subtitulo_cartel = (
+                f"Entrega: {nro_entrega} | Cliente: {pedido.get('cliente', '-')}"
+            )
+        else:
+            subtitulo_cartel = f"Cliente: {pedido.get('cliente', '-')}"
+
+    with st.container(border=True):
+
+        st.markdown(
+            f"<h2 style='text-align:center; color:#1a4d8f;'>{titulo_cartel}</h2>",
+            unsafe_allow_html=True
         )
 
-
-    st.markdown(f"""
-        <div style="
-            background-color: #1a4d8f;
-            padding: 20px;
-            border-radius: 10px;
-            color: white;
-            text-align: center;
-            margin-bottom: 20px;
-        ">
-            <h2 style="
-                margin: 0;
-                color: white;
-                font-size: 24px;
-            ">
-                {titulo_cartel}
-            </h2>
-
-            <h3 style="
-                margin: 10px 0 0 0;
-                color: #e0e0e0;
-                font-size: 18px;
-            ">
-                {subtitulo_cartel}
-            </h3>
-        </div>
-    """, unsafe_allow_html=True)
-
+        st.markdown(
+            f"<h4 style='text-align:center;'>{subtitulo_cartel}</h4>",
+            unsafe_allow_html=True
+        )
 
     pedido_id = pedido["id"]
+
 
 
     # ======================================================
