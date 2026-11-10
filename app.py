@@ -381,9 +381,6 @@ def campo_transporte(
             indice = i
             break
 
-    st.caption(
-        "Selecciona un transporte registrado o ingresa uno nuevo."
-    )
 
     seleccionado = st.selectbox(
         "Transportes registrados",
