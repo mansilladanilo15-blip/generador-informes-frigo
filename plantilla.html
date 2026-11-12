@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -25,6 +26,7 @@
     }
 
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       padding: 0;
@@ -43,12 +45,35 @@
       border-bottom: 2px solid #1a4d8f;
       background: white;
     }
-    .encabezado-repetido .logos { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .encabezado-repetido .logos td { width: 33.33%; vertical-align: middle; border: none; padding: 0; }
+
+    .encabezado-repetido .logos {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .encabezado-repetido .logos td {
+      width: 33.33%;
+      vertical-align: middle;
+      border: none;
+      padding: 0;
+    }
+
     .logo-izquierdo { text-align: left; }
     .logo-derecho { text-align: right; }
-    .encabezado-repetido img { max-width: 3.4cm; max-height: 1.15cm; object-fit: contain; }
-    .texto-encabezado { text-align: center; font-size: 8pt; font-weight: bold; color: #1a4d8f; }
+
+    .encabezado-repetido img {
+      max-width: 3.4cm;
+      max-height: 1.15cm;
+      object-fit: contain;
+    }
+
+    .texto-encabezado {
+      text-align: center;
+      font-size: 8pt;
+      font-weight: bold;
+      color: #1a4d8f;
+    }
 
     .titulo-informe {
       width: 100%;
@@ -63,6 +88,7 @@
       page-break-after: avoid;
       break-after: avoid;
     }
+
     .banda-estado {
       background: #f2f6fb;
       border-left: 3px solid #1a4d8f;
@@ -70,14 +96,52 @@
       margin: 5px 0;
       font-size: 8.5pt;
     }
-    .banda-estado .etiqueta { font-weight: 700; color: #1a4d8f; }
-    .banda-estado .separador { color: #ccc; margin: 0 6px; }
 
-    .tabla-datos { width: 100%; border-collapse: collapse; border: 1px solid #d0d7de; margin-bottom: 8px; }
-    .tabla-datos td { padding: 4px 7px; border: 1px solid #d0d7de; vertical-align: top; font-size: 9pt; }
-    .etiqueta-campo { width: 15%; background: #f2f6fb; font-weight: 600; color: #1a4d8f; text-transform: uppercase; }
+    .banda-estado .etiqueta {
+      font-weight: 700;
+      color: #1a4d8f;
+    }
+
+    .banda-estado .separador {
+      color: #ccc;
+      margin: 0 6px;
+    }
+
+    .tabla-datos {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #d0d7de;
+      margin-bottom: 8px;
+    }
+
+    .tabla-datos td {
+      padding: 4px 7px;
+      border: 1px solid #d0d7de;
+      vertical-align: top;
+      font-size: 9pt;
+    }
+
+    .etiqueta-campo {
+      width: 15%;
+      background: #f2f6fb;
+      font-weight: 600;
+      color: #1a4d8f;
+      text-transform: uppercase;
+    }
+
     .valor-campo { width: 35%; }
-    .subtitulo { background: #e8f0fa; color: #1a4d8f; font-weight: 700; font-size: 9pt; text-transform: uppercase; letter-spacing: .5px; padding: 4px 7px; border: 1px solid #d0d7de; border-bottom: none; }
+
+    .subtitulo {
+      background: #e8f0fa;
+      color: #1a4d8f;
+      font-weight: 700;
+      font-size: 9pt;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 4px 7px;
+      border: 1px solid #d0d7de;
+      border-bottom: none;
+    }
 
     .titulo-categoria {
       background: #1a4d8f;
@@ -92,6 +156,7 @@
       page-break-after: avoid;
       break-after: avoid;
     }
+
     .salto-pagina {
       display: block;
       height: 0;
@@ -113,17 +178,29 @@
       break-inside: avoid;
       font-size: 9pt;
     }
-    .tabla-estibas th, .tabla-estibas td {
+
+    .tabla-estibas th,
+    .tabla-estibas td {
       border: 1px solid #cbd5e1;
       padding: 6px 8px;
       text-align: center !important;
       vertical-align: middle;
     }
-    .tabla-estibas th { background: #eaf0f8; color: #1a365d; font-weight: 700; }
+
+    .tabla-estibas th {
+      background: #eaf0f8;
+      color: #1a365d;
+      font-weight: 700;
+    }
+
     .tabla-estibas .col-numero { width: 20%; }
     .tabla-estibas .col-pata { width: 50%; }
     .tabla-estibas .col-cantidad { width: 30%; }
-    .tabla-estibas tbody tr:nth-child(even):not(.fila-total) td { background: #f7faff; }
+
+    .tabla-estibas tbody tr:nth-child(even):not(.fila-total) td {
+      background: #f7faff;
+    }
+
     .tabla-estibas .fila-total td {
       background: #eaf0f8 !important;
       color: #1a4d8f;
@@ -131,10 +208,12 @@
       border-top: 2px solid #9bb6d5;
       padding: 8px;
     }
-    .tabla-estibas .fila-total td:last-child { font-size: 11pt; }
 
-    /* Cada bloque generado por Python contiene máximo cuatro fotos (2x2).
-       Se mantiene completo en una sola página. */
+    .tabla-estibas .fila-total td:last-child {
+      font-size: 11pt;
+    }
+
+    /* Fotografías */
     .tabla-fotos {
       width: 100%;
       table-layout: fixed;
@@ -144,11 +223,21 @@
       page-break-inside: avoid !important;
       break-inside: avoid !important;
     }
-    .tabla-fotos tbody, .tabla-fotos tr, .tabla-fotos td {
+
+    .tabla-fotos tbody,
+    .tabla-fotos tr,
+    .tabla-fotos td {
       page-break-inside: avoid !important;
       break-inside: avoid !important;
     }
-    .tabla-fotos td { width: 50%; padding: 3px; text-align: center; vertical-align: middle; }
+
+    .tabla-fotos td {
+      width: 50%;
+      padding: 3px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
     .contenedor-img {
       width: 100%;
       height: 7.0cm;
@@ -160,6 +249,7 @@
       border-radius: 4px;
       background: #fafafa;
     }
+
     .contenedor-img img {
       display: block;
       max-width: 100%;
@@ -170,27 +260,57 @@
       object-position: center;
       margin: 0 auto;
     }
-    .tabla-fotos.tabla-single .contenedor-img.single { height: 14.5cm; }
-    .tabla-fotos.tabla-single .contenedor-img.single img { max-height: 14.2cm; }
-    .celda-vacia { border: none !important; background: transparent !important; }
-    .pie-foto { text-align: center; font-size: 8pt; color: #526174; overflow-wrap: anywhere; margin-top: 4px; }
+
+    .tabla-fotos.tabla-single .contenedor-img.single {
+      height: 14.5cm;
+    }
+
+    .tabla-fotos.tabla-single .contenedor-img.single img {
+      max-height: 14.2cm;
+    }
+
+    .celda-vacia {
+      border: none !important;
+      background: transparent !important;
+    }
+
+    .pie-foto {
+      text-align: center;
+      font-size: 8pt;
+      color: #526174;
+      overflow-wrap: anywhere;
+      margin-top: 4px;
+    }
 
     table { page-break-inside: auto; }
-    .tabla-fotos, .tabla-estibas { page-break-inside: avoid !important; }
+
+    .tabla-fotos,
+    .tabla-estibas {
+      page-break-inside: avoid !important;
+    }
+
     thead { display: table-header-group; }
-    tr { page-break-inside: avoid; break-inside: avoid; }
+
+    tr {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
   </style>
 </head>
+
 <body>
+
 <div class="encabezado-repetido">
   <table class="logos">
     <tr>
       <td class="logo-izquierdo">
         {{logo_izq_html_grande}}
       </td>
+
       <td class="texto-encabezado">
         AUSTRALIS MAR SA
       </td>
+
       <td class="logo-derecho">
         {{logo_der_html_grande}}
       </td>
@@ -200,57 +320,79 @@
 
 <div class="titulo-informe">{{titulo_informe}}</div>
 
-  <div class="banda-estado">
-    <span class="etiqueta">FECHA:</span> {{fecha}}
-    <span class="separador">|</span>
-    <span class="etiqueta">N° ENTREGA:</span> {{nro_entrega}}
-    <span class="separador">|</span>
-    <span class="etiqueta">GUÍA DESPACHO:</span> {{guia_despacho}}
-  </div>
+<div class="banda-estado">
+  <span class="etiqueta">FECHA:</span> {{fecha}}
+  <span class="separador">|</span>
+  <span class="etiqueta">N° ENTREGA:</span> {{nro_entrega}}
+  <span class="separador">|</span>
+  <span class="etiqueta">GUÍA DESPACHO:</span> {{guia_despacho}}
+</div>
 
-  <table class="tabla-datos">
-    <tr>
-      <td class="etiqueta-campo">Cliente / Destino</td>
-      <td class="valor-campo">{{cliente}}</td>
-      <td class="etiqueta-campo">Origen</td>
-      <td class="valor-campo">{{origen}}</td>
-    </tr>
-    <tr>
-      <td class="etiqueta-campo">N° Pedido</td>
-      <td class="valor-campo">{{nro_pedido_display}}</td>
-      <td class="etiqueta-campo">Tipo</td>
-      <td class="valor-campo">{{tipo_informe}}</td>
-    </tr>
-  </table>
+<table class="tabla-datos">
 
-  <div class="subtitulo">🚛 Datos del transporte</div>
-  <table class="tabla-datos" style="margin-bottom: 12px;">
-    <tr>
-      <td class="etiqueta-campo">Transporte</td>
-      <td class="valor-campo">{{transporte}}</td>
-      <td class="etiqueta-campo">Chofer</td>
-      <td class="valor-campo">{{chofer}}</td>
-    </tr>
-    <tr>
-      <td class="etiqueta-campo">Patente Camión</td>
-      <td class="valor-campo">{{patente_camion}}</td>
-      <td class="etiqueta-campo">Patente Rampla</td>
-      <td class="valor-campo">{{patente_rampla}}</td>
-    </tr>
-    <tr>
-      <td class="etiqueta-campo">Sello Final</td>
-      <td class="valor-campo">{{sello_final}}</td>
-      <td class="etiqueta-campo">Sellos Provisorios</td>
-      <td class="valor-campo">{{sellos_provisorios}}</td>
-    </tr>
-    <tr>
-      <td class="etiqueta-campo">N° Termógrafo</td>
-      <td class="valor-campo" colspan="3">{{nro_termografo}}</td>
-    </tr>
-  </table>
+  <!-- EMPRESA: NUEVO CAMPO AL INICIO -->
+  <tr>
+    <td class="etiqueta-campo">Empresa</td>
+    <td class="valor-campo" colspan="3">{{empresa}}</td>
+  </tr>
 
-  <!-- 🔥 AQUÍ VAN TODAS LAS SECCIONES DE FOTOS -->
-  {{secciones}}
+  <!-- CLIENTE / DESTINO Y ORIGEN -->
+  <tr>
+    <td class="etiqueta-campo">Cliente / Destino</td>
+    <td class="valor-campo">{{cliente}}</td>
+
+    <td class="etiqueta-campo">Origen</td>
+    <td class="valor-campo">{{origen}}</td>
+  </tr>
+
+  <!-- PEDIDO Y TIPO -->
+  <tr>
+    <td class="etiqueta-campo">N° Pedido</td>
+    <td class="valor-campo">{{nro_pedido_display}}</td>
+
+    <td class="etiqueta-campo">Tipo</td>
+    <td class="valor-campo">{{tipo_informe}}</td>
+  </tr>
+
+</table>
+
+<div class="subtitulo">🚛 Datos del transporte</div>
+
+<table class="tabla-datos" style="margin-bottom: 12px;">
+
+  <tr>
+    <td class="etiqueta-campo">Transporte</td>
+    <td class="valor-campo">{{transporte}}</td>
+
+    <td class="etiqueta-campo">Chofer</td>
+    <td class="valor-campo">{{chofer}}</td>
+  </tr>
+
+  <tr>
+    <td class="etiqueta-campo">Patente Camión</td>
+    <td class="valor-campo">{{patente_camion}}</td>
+
+    <td class="etiqueta-campo">Patente Rampla</td>
+    <td class="valor-campo">{{patente_rampla}}</td>
+  </tr>
+
+  <tr>
+    <td class="etiqueta-campo">Sello Final</td>
+    <td class="valor-campo">{{sello_final}}</td>
+
+    <td class="etiqueta-campo">Sellos Provisorios</td>
+    <td class="valor-campo">{{sellos_provisorios}}</td>
+  </tr>
+
+  <tr>
+    <td class="etiqueta-campo">N° Termógrafo</td>
+    <td class="valor-campo" colspan="3">{{nro_termografo}}</td>
+  </tr>
+
+</table>
+
+<!-- SECCIONES DE FOTOGRAFÍAS -->
+{{secciones}}
 
 </body>
 </html>
