@@ -1055,6 +1055,46 @@ def _generar_pdf_pedido(pedido_id):
 
 
 # ============================================================
+# FILTRO DE PEDIDOS POR SEMANA ISO
+# ============================================================
+
+def _fecha_pedido_para_semana(pedido):
+    """Obtiene una fecha confiable del pedido para calcular su semana ISO."""
+    for campo in ("fecha", "fecha_creacion", "created_at"):
+        valor = pedido.get(campo)
+        if not valor:
+            continue
+        if isinstance(valor, datetime):
+            return valor.date()
+        if isinstance(valor, date):
+            return valor
+        try:
+            # Acepta YYYY-MM-DD y fecha/hora ISO.
+            return datetime.fromisoformat(str(valor).replace("Z", "+00:00")).date()
+        except (TypeError, ValueError):
+            try:
+                return date.fromisoformat(str(valor)[:10])
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _semana_iso_pedido(pedido):
+    fecha_pedido = _fecha_pedido_para_semana(pedido)
+    if fecha_pedido is None:
+        return None
+    anio_iso, semana_iso, _ = fecha_pedido.isocalendar()
+    return (anio_iso, semana_iso)
+
+
+def _etiqueta_semana_iso(clave_semana):
+    anio, semana = clave_semana
+    lunes = date.fromisocalendar(anio, semana, 1)
+    domingo = date.fromisocalendar(anio, semana, 7)
+    return f"Semana {semana:02d} · {lunes:%d/%m/%Y} al {domingo:%d/%m/%Y}"
+
+
+# ============================================================
 # GESTIÓN DE PEDIDOS
 # ============================================================
 
@@ -1248,13 +1288,60 @@ with st.sidebar:
 
     else:
 
+        # Semanas disponibles según la fecha del pedido (semana ISO).
+        semanas_disponibles = sorted(
+            {
+                semana
+                for pedido in pedidos_nube
+                if (semana := _semana_iso_pedido(pedido)) is not None
+            },
+            reverse=True
+        )
+
+        opciones_semana = ["Todas las semanas"] + [
+            _etiqueta_semana_iso(semana)
+            for semana in semanas_disponibles
+        ]
+        mapa_opciones_semana = {
+            _etiqueta_semana_iso(semana): semana
+            for semana in semanas_disponibles
+        }
+
+        semana_actual = date.today().isocalendar()
+        clave_semana_actual = (semana_actual.year, semana_actual.week)
+        etiqueta_actual = (
+            _etiqueta_semana_iso(clave_semana_actual)
+            if clave_semana_actual in semanas_disponibles
+            else "Todas las semanas"
+        )
+
+        if st.session_state.get("filtro_semana_pedidos") not in opciones_semana:
+            st.session_state["filtro_semana_pedidos"] = etiqueta_actual
+
+        filtro_semana = st.selectbox(
+            "📅 Filtrar pedidos por semana",
+            opciones_semana,
+            key="filtro_semana_pedidos"
+        )
+
+        if filtro_semana == "Todas las semanas":
+            pedidos_filtrados = pedidos_nube
+        else:
+            semana_seleccionada = mapa_opciones_semana[filtro_semana]
+            pedidos_filtrados = [
+                pedido for pedido in pedidos_nube
+                if _semana_iso_pedido(pedido) == semana_seleccionada
+            ]
+
+        st.caption(f"{len(pedidos_filtrados)} pedido(s) en el filtro")
+
         pendientes = [
-            p for p in pedidos_nube
+            p for p in pedidos_filtrados
             if p.get("estado") != "Finalizado"
         ]
 
         finalizados = [
-            p for p in pedidos_nube
+            p for p in pedidos_filtrados
             if p.get("estado") == "Finalizado"
         ]
 
@@ -1697,15 +1784,17 @@ if pedido_actual:
     # DOCUMENTACIÓN
     # --------------------------------------------------------
 
+    fotos_ocultas_actuales = st.session_state.get("fotos_ocultas", set())
+    docs = [
+        x for x in fotos
+        if x.startswith("documentacion_")
+        and x not in fotos_ocultas_actuales
+    ]
+
     with st.expander(
-        "0. Documentación",
+        f"0. Documentación ({len(docs)} fotos)",
         expanded=False
     ):
-
-        docs = [
-            x for x in fotos
-            if x.startswith("documentacion_")
-        ]
 
         if docs:
 
@@ -1795,8 +1884,14 @@ if pedido_actual:
     # ESTIBAS
     # --------------------------------------------------------
 
+    estibas = [
+        x for x in fotos
+        if x.startswith("estiba_pata_")
+        and x not in st.session_state.get("fotos_ocultas", set())
+    ]
+
     with st.expander(
-        "1. Estibas",
+        f"1. Estibas ({len(estibas)} fotos)",
         expanded=True
     ):
 
@@ -2326,15 +2421,16 @@ if pedido_actual:
 
     def seccion_extra(titulo, prefijo):
 
+        items = [
+            x for x in fotos
+            if x.startswith(prefijo)
+            and x not in st.session_state.get("fotos_ocultas", set())
+        ]
+
         with st.expander(
-            titulo,
+            f"{titulo} ({len(items)} fotos)",
             expanded=False
         ):
-
-            items = [
-                x for x in fotos
-                if x.startswith(prefijo)
-            ]
 
             if items:
 
