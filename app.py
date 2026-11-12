@@ -152,137 +152,372 @@ def mostrar_zoom(nombre_foto, bytes_foto):
         st.rerun()
 
 
-def renderizar_galeria(key, fotos, pedido_id, cols_num=4):
+CATEGORIAS_FOTOS = {
+    "Documentación": "documentacion_",
+    "Estibas": "estiba_pata_",
+    "Camión": "camion_",
+    "Termógrafo": "termografo_",
+    "Sellos": "sello_",
+    "Thermo-King": "thermoking_",
+    "Etiquetas": "etiqueta_",
+}
 
+def _prefijo_categoria(nombre_categoria):
+    return CATEGORIAS_FOTOS.get(nombre_categoria)
+
+def _categoria_de_archivo(nombre_archivo):
+    for categoria, prefijo in CATEGORIAS_FOTOS.items():
+        if nombre_archivo.startswith(prefijo):
+            return categoria
+    return None
+
+def _clave_seleccion_foto(pedido_id, key, nombre):
+    firma = hashlib.sha1(nombre.encode("utf-8")).hexdigest()[:12]
+    return f"sel_foto_{pedido_id}_{key}_{firma}"
+
+def _obtener_pedido_actual_nube(pedido_id):
+    return next(
+        (p.copy() for p in (nube.obtener_pedidos_nube() or [])
+         if str(p.get("id")) == str(pedido_id)),
+        None
+    )
+
+def _limpiar_metadata_estiba(pedido_data, nombre):
+    cajas = pedido_data.get("cajas_estibas", {}) or {}
+    patas = pedido_data.get("patas_estibas", {}) or {}
+    cajas.pop(nombre, None)
+    patas.pop(nombre, None)
+    pedido_data["cajas_estibas"] = cajas
+    pedido_data["patas_estibas"] = patas
+
+def eliminar_fotos_en_lote(pedido_id, nombres):
+    """Elimina archivos y sus metadatos de estiba asociados."""
+    pedido_data = _obtener_pedido_actual_nube(pedido_id)
+    if pedido_data is None:
+        raise RuntimeError("No se encontró el pedido en Supabase.")
+
+    eliminadas = []
+    errores = []
+
+    for nombre in nombres:
+        try:
+            nube.borrar_foto_nube(pedido_id, nombre)
+            # Confirmar que el archivo ya no aparezca en Storage.
+            restantes = nube.obtener_fotos_nube(pedido_id) or []
+            if nombre in restantes:
+                raise RuntimeError("La foto todavía aparece en Storage.")
+
+            _limpiar_metadata_estiba(pedido_data, nombre)
+            eliminadas.append(nombre)
+            st.session_state["fotos_ocultas"].add(nombre)
+        except Exception as exc:
+            errores.append(f"{nombre}: {exc}")
+
+    if eliminadas:
+        nube.subir_pedido_nube(pedido_id, pedido_data)
+
+    st.cache_data.clear()
+    return eliminadas, errores
+
+def mover_fotos_en_lote(pedido_id, nombres, categoria_destino):
+    """
+    Copia primero, verifica el archivo de destino y recién entonces
+    elimina el original. Al mover a Estibas aplica OCR y guarda metadatos.
+    """
+    prefijo_destino = _prefijo_categoria(categoria_destino)
+    if not prefijo_destino:
+        raise ValueError("Categoría de destino no válida.")
+
+    pedido_data = _obtener_pedido_actual_nube(pedido_id)
+    if pedido_data is None:
+        raise RuntimeError("No se encontró el pedido en Supabase.")
+
+    pedido_data.setdefault("cajas_estibas", {})
+    pedido_data.setdefault("patas_estibas", {})
+
+    movidas = []
+    errores = []
+
+    analizar_fotos = None
+    if categoria_destino == "Estibas":
+        from ocr_bridge import analizar_fotos
+
+    for nombre in nombres:
+        categoria_origen = _categoria_de_archivo(nombre)
+        if categoria_origen == categoria_destino:
+            continue
+
+        try:
+            contenido = nube.descargar_foto_nube(pedido_id, nombre)
+            if not contenido:
+                raise RuntimeError("No se pudo descargar la foto original.")
+
+            if categoria_destino == "Estibas":
+                resultados = analizar_fotos([(nombre, contenido)]) or []
+                resultado = resultados[0] if resultados else {}
+                pata = resultado.get("pata")
+                cajas = resultado.get("total_cajas", 0)
+
+                try:
+                    pata = int(pata)
+                except (TypeError, ValueError):
+                    pata = 99
+
+                if pata <= 0:
+                    pata = 99
+
+                sufijo = uuid.uuid4().hex[:10]
+                if pata == 99:
+                    nuevo_nombre = f"estiba_pata_99_REVISAR_{sufijo}.jpg"
+                else:
+                    nuevo_nombre = f"estiba_pata_{pata}_{sufijo}.jpg"
+
+                try:
+                    cajas = int(cajas or 0)
+                except (TypeError, ValueError):
+                    cajas = 0
+            else:
+                nuevo_nombre = f"{prefijo_destino}{uuid.uuid4().hex[:12]}.jpg"
+
+            nube.subir_foto_nube(pedido_id, nuevo_nombre, contenido)
+
+            # No se elimina el original hasta confirmar la copia.
+            archivos_storage = nube.obtener_fotos_nube(pedido_id) or []
+            if nuevo_nombre not in archivos_storage:
+                raise RuntimeError("No se pudo confirmar la copia en Storage.")
+
+            # Primero borrar y confirmar el original. Si falla, intentar
+            # revertir la copia para no dejar archivos duplicados sin control.
+            nube.borrar_foto_nube(pedido_id, nombre)
+            archivos_storage = nube.obtener_fotos_nube(pedido_id) or []
+            if nombre in archivos_storage:
+                try:
+                    nube.borrar_foto_nube(pedido_id, nuevo_nombre)
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    "La copia se creó, pero no se pudo confirmar el borrado del original. "
+                    "Se intentó revertir la copia."
+                )
+
+            # Actualizar metadata solo después de confirmar el movimiento.
+            _limpiar_metadata_estiba(pedido_data, nombre)
+            if categoria_destino == "Estibas":
+                pedido_data["cajas_estibas"][nuevo_nombre] = cajas
+                pedido_data["patas_estibas"][nuevo_nombre] = pata
+
+            st.session_state["fotos_ocultas"].add(nombre)
+            movidas.append((nombre, nuevo_nombre, pata if categoria_destino == "Estibas" else None))
+
+        except Exception as exc:
+            errores.append(f"{nombre}: {exc}")
+
+    if movidas:
+        nube.subir_pedido_nube(pedido_id, pedido_data)
+
+    st.cache_data.clear()
+    return movidas, errores
+
+def renderizar_galeria(key, fotos, pedido_id, cols_num=4, bloqueado=False):
     fotos = [
         f for f in fotos
         if f not in st.session_state["fotos_ocultas"]
     ]
-
     if not fotos:
         return
 
+    # Normalizar la categoría de la galería.
+    prefijo_actual = key if key.endswith("_") else {
+        "documentacion": "documentacion_",
+        "estibas": "estiba_pata_",
+    }.get(key, key)
+    categoria_actual = next(
+        (cat for cat, prefijo in CATEGORIAS_FOTOS.items()
+         if prefijo == prefijo_actual),
+        None
+    )
+
+    st.markdown(
+        f"**{len(fotos)} fotografía(s)** · Selecciona una o varias para "
+        "moverlas o eliminarlas en conjunto."
+    )
+
+    # Seleccionar / deseleccionar todas las fotos visibles.
+    acciones_sel = st.columns(2)
+    if not bloqueado:
+        with acciones_sel[0]:
+            if st.button(
+                "☑️ Seleccionar todas",
+                key=f"sel_todas_{pedido_id}_{key}_{RC}",
+                use_container_width=True
+            ):
+                for nombre in fotos:
+                    st.session_state[_clave_seleccion_foto(pedido_id, key, nombre)] = True
+                st.rerun()
+        with acciones_sel[1]:
+            if st.button(
+                "⬜ Limpiar selección",
+                key=f"limpiar_sel_{pedido_id}_{key}_{RC}",
+                use_container_width=True
+            ):
+                for nombre in fotos:
+                    st.session_state[_clave_seleccion_foto(pedido_id, key, nombre)] = False
+                st.rerun()
+
     cols = st.columns(cols_num)
-
-    for i, f in enumerate(fotos):
-
+    for i, nombre in enumerate(fotos):
         with cols[i % cols_num]:
-
-            img_placeholder = st.empty()
             bytes_img = None
-
             try:
-                bytes_img = nube.descargar_foto_nube(
-                    pedido_id,
-                    f
-                )
-
-                b64 = convertir_a_base64(
-                    bytes_img,
-                    max_ancho=400
-                )
-
+                bytes_img = nube.descargar_foto_nube(pedido_id, nombre)
+                b64 = convertir_a_base64(bytes_img, max_ancho=500)
                 if b64:
-                    img_placeholder.markdown(
-                        f'<img src="{b64}" '
-                        f'style="width:100%; border:1px solid #ddd; '
-                        f'border-radius:6px; margin-bottom:6px;">',
+                    st.markdown(
+                        f'<div style="width:100%; aspect-ratio:4/3; '
+                        f'background:#eef0f3; border:1px solid #d7dbe0; '
+                        f'border-radius:8px; overflow:hidden; display:flex; '
+                        f'align-items:center; justify-content:center; '
+                        f'margin-bottom:7px;">'
+                        f'<img src="{b64}" style="width:100%; height:100%; '
+                        f'object-fit:contain; display:block;">'
+                        f'</div>',
                         unsafe_allow_html=True
                     )
-
+                else:
+                    st.warning("⚠️ No se pudo mostrar la imagen.")
             except Exception:
-                img_placeholder.warning("⚠️ Error al cargar")
+                st.warning("⚠️ Error al cargar la fotografía.")
 
-            col1, col2 = st.columns(2)
+            st.caption(nombre)
+            if not bloqueado:
+                st.checkbox(
+                    "Seleccionar",
+                    key=_clave_seleccion_foto(pedido_id, key, nombre)
+                )
 
-            with col1:
+            col_ver, col_borrar = st.columns(2)
+            with col_ver:
                 if st.button(
                     "🔍 Ver",
-                    key=f"{key}_zoom_{i}_{RC}_{f}",
-                    width="stretch"
+                    key=f"{key}_zoom_{i}_{RC}_{hashlib.sha1(nombre.encode()).hexdigest()[:8]}",
+                    use_container_width=True
                 ):
                     if bytes_img:
-                        mostrar_zoom(f, bytes_img)
-
-            with col2:
-                if st.button(
+                        mostrar_zoom(nombre, bytes_img)
+            with col_borrar:
+                if not bloqueado and st.button(
                     "🗑️ Borrar",
-                    key=f"{key}_del_{i}_{RC}_{f}",
-                    width="stretch"
+                    key=f"{key}_del_{i}_{RC}_{hashlib.sha1(nombre.encode()).hexdigest()[:8]}",
+                    use_container_width=True
                 ):
-                    with st.spinner("Borrando..."):
-                        nube.borrar_foto_nube(
-                            pedido_id,
-                            f
+                    try:
+                        eliminadas, errores = eliminar_fotos_en_lote(
+                            pedido_id, [nombre]
                         )
-
-                        st.session_state["fotos_ocultas"].add(f)
-                        st.cache_data.clear()
-                        time.sleep(0.5)
+                        if eliminadas:
+                            st.success("Foto eliminada.")
+                        if errores:
+                            st.error(errores[0])
+                        st.session_state["reinicio_count"] += 1
                         st.rerun()
+                    except Exception as exc:
+                        st.error(f"No se pudo eliminar: {exc}")
 
-            opciones = [
-                "Mantener aquí",
-                "Mover a Documentación",
-                "Mover a Camión",
-                "Mover a Termógrafo",
-                "Mover a Sello",
-                "Mover a Thermo-king"
-            ]
+    if bloqueado:
+        return
 
-            opciones_filtradas = [
-                op for op in opciones
-                if op != f"Mover a {key.capitalize()}"
-            ]
+    seleccionadas = [
+        nombre for nombre in fotos
+        if st.session_state.get(
+            _clave_seleccion_foto(pedido_id, key, nombre), False
+        )
+    ]
 
-            destino = st.selectbox(
-                "Mover foto a:",
-                opciones_filtradas,
-                key=f"derivar_{key}_{i}_{RC}_{f}",
-                label_visibility="collapsed"
-            )
+    st.divider()
+    st.markdown(f"**Selección actual: {len(seleccionadas)} foto(s)**")
 
-            if destino != "Mantener aquí":
+    if not seleccionadas:
+        st.info("Marca las casillas de las fotografías para habilitar las acciones grupales.")
+        return
 
-                if st.button(
-                    "➡️ Confirmar",
-                    key=f"btn_mover_{key}_{i}_{RC}_{f}",
-                    width="stretch"
-                ):
+    categorias_destino = [
+        cat for cat in CATEGORIAS_FOTOS
+        if cat != categoria_actual
+    ]
+    destino = st.selectbox(
+        "Mover las fotos seleccionadas a:",
+        options=categorias_destino,
+        key=f"destino_lote_{pedido_id}_{key}_{RC}"
+    )
 
-                    prefijo = {
-                        "Mover a Documentación": "documentacion_",
-                        "Mover a Camión": "camion_",
-                        "Mover a Termógrafo": "termografo_",
-                        "Mover a Sello": "sello_",
-                        "Mover a Thermo-king": "thermoking_"
-                    }[destino]
-
-                    nuevo_nombre = (
-                        f"{prefijo}{uuid.uuid4().hex[:6]}.jpg"
+    col_mover, col_eliminar = st.columns(2)
+    with col_mover:
+        if st.button(
+            f"➡️ Mover {len(seleccionadas)} foto(s)",
+            key=f"mover_lote_{pedido_id}_{key}_{RC}",
+            use_container_width=True,
+            type="primary"
+        ):
+            with st.spinner("Moviendo fotografías y actualizando sus datos..."):
+                try:
+                    movidas, errores = mover_fotos_en_lote(
+                        pedido_id, seleccionadas, destino
                     )
-
-                    bytes_foto = nube.descargar_foto_nube(
-                        pedido_id,
-                        f
-                    )
-
-                    nube.subir_foto_nube(
-                        pedido_id,
-                        nuevo_nombre,
-                        bytes_foto
-                    )
-
-                    nube.borrar_foto_nube(
-                        pedido_id,
-                        f
-                    )
-
-                    st.session_state["fotos_ocultas"].add(f)
-                    st.cache_data.clear()
-                    time.sleep(0.5)
+                    if movidas:
+                        st.success(f"Se movieron {len(movidas)} foto(s) a {destino}.")
+                    if errores:
+                        st.warning("Algunas fotos no se pudieron mover:")
+                        for error in errores:
+                            st.write(f"• {error}")
+                    for nombre in seleccionadas:
+                        st.session_state[_clave_seleccion_foto(pedido_id, key, nombre)] = False
+                    st.session_state["reinicio_count"] += 1
                     st.rerun()
+                except Exception as exc:
+                    st.error(f"No se pudo completar el movimiento: {exc}")
 
+    with col_eliminar:
+        if st.button(
+            f"🗑️ Eliminar {len(seleccionadas)} foto(s)",
+            key=f"solicitar_borrado_lote_{pedido_id}_{key}_{RC}",
+            use_container_width=True
+        ):
+            st.session_state[f"confirmar_borrado_{pedido_id}_{key}"] = True
+
+    if st.session_state.get(f"confirmar_borrado_{pedido_id}_{key}", False):
+        st.warning(
+            f"Vas a eliminar definitivamente {len(seleccionadas)} fotografía(s). "
+            "Esta acción no se puede deshacer."
+        )
+        confirmar = st.checkbox(
+            "Confirmo que deseo eliminar estas fotografías",
+            key=f"check_confirmar_borrado_{pedido_id}_{key}_{RC}"
+        )
+        if st.button(
+            "Confirmar eliminación definitiva",
+            key=f"ejecutar_borrado_lote_{pedido_id}_{key}_{RC}",
+            type="primary",
+            disabled=not confirmar,
+            use_container_width=True
+        ):
+            with st.spinner("Eliminando fotografías..."):
+                try:
+                    eliminadas, errores = eliminar_fotos_en_lote(
+                        pedido_id, seleccionadas
+                    )
+                    if eliminadas:
+                        st.success(f"Se eliminaron {len(eliminadas)} foto(s).")
+                    if errores:
+                        st.warning("Algunas fotos no se pudieron eliminar:")
+                        for error in errores:
+                            st.write(f"• {error}")
+                    st.session_state[f"confirmar_borrado_{pedido_id}_{key}"] = False
+                    for nombre in seleccionadas:
+                        st.session_state[_clave_seleccion_foto(pedido_id, key, nombre)] = False
+                    st.session_state["reinicio_count"] += 1
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"No se pudo completar la eliminación: {exc}")
 
 def val(key, default=""):
 
@@ -381,6 +616,9 @@ def campo_transporte(
             indice = i
             break
 
+    st.caption(
+        "Selecciona un transporte registrado o ingresa uno nuevo."
+    )
 
     seleccionado = st.selectbox(
         "Transportes registrados",
@@ -1059,90 +1297,8 @@ with st.sidebar:
             st.divider()
             st.markdown("**🟢 Finalizados**")
 
-            # Clasificar pedidos finalizados por semana ISO y año.
-            # Se utiliza primero la fecha del pedido y, si no existe,
-            # la fecha de creación como respaldo.
-            def clave_semana_pedido(p):
-                valor_fecha = p.get("fecha") or p.get("fecha_creacion")
-
-                try:
-                    if isinstance(valor_fecha, datetime):
-                        fecha_pedido = valor_fecha.date()
-                    elif isinstance(valor_fecha, date):
-                        fecha_pedido = valor_fecha
-                    else:
-                        fecha_pedido = date.fromisoformat(
-                            str(valor_fecha).strip()[:10]
-                        )
-
-                    iso = fecha_pedido.isocalendar()
-                    return (iso.year, iso.week)
-                except (TypeError, ValueError):
-                    return None
-
-            pedidos_por_semana = {}
-            for pedido_finalizado in finalizados:
-                clave = clave_semana_pedido(pedido_finalizado)
-                pedidos_por_semana.setdefault(clave, []).append(
-                    pedido_finalizado
-                )
-
-            semanas_ordenadas = sorted(
-                [k for k in pedidos_por_semana if k is not None],
-                reverse=True
-            )
-
-            opciones_semana = ["Todas las semanas"]
-            claves_por_opcion = {"Todas las semanas": "todas"}
-
-            for anio_semana, numero_semana in semanas_ordenadas:
-                etiqueta = (
-                    f"Semana {numero_semana:02d} - {anio_semana} "
-                    f"({len(pedidos_por_semana[(anio_semana, numero_semana)])})"
-                )
-                opciones_semana.append(etiqueta)
-                claves_por_opcion[etiqueta] = (anio_semana, numero_semana)
-
-            if None in pedidos_por_semana:
-                etiqueta_sin_fecha = (
-                    f"Sin fecha ({len(pedidos_por_semana[None])})"
-                )
-                opciones_semana.append(etiqueta_sin_fecha)
-                claves_por_opcion[etiqueta_sin_fecha] = None
-
-            semana_actual = date.today().isocalendar()
-            clave_actual = (semana_actual.year, semana_actual.week)
-            indice_inicial = 0
-
-            for indice, opcion in enumerate(opciones_semana):
-                if claves_por_opcion[opcion] == clave_actual:
-                    indice_inicial = indice
-                    break
-            else:
-                if len(opciones_semana) > 1:
-                    indice_inicial = 1
-
-            filtro_semana = st.selectbox(
-                "📅 Filtrar por semana",
-                opciones_semana,
-                index=indice_inicial,
-                key="filtro_semana_pedidos_finalizados"
-            )
-
-            clave_seleccionada = claves_por_opcion[filtro_semana]
-
-            if clave_seleccionada == "todas":
-                finalizados_filtrados = finalizados
-            else:
-                finalizados_filtrados = pedidos_por_semana.get(
-                    clave_seleccionada, []
-                )
-
-            if finalizados_filtrados:
-                for p in finalizados_filtrados:
-                    boton_pedido(p, "🔒")
-            else:
-                st.caption("No hay pedidos finalizados para esta semana.")
+            for p in finalizados:
+                boton_pedido(p, "🔒")
 
     st.divider()
 
@@ -1553,7 +1709,8 @@ if pedido_actual:
                 "documentacion",
                 docs,
                 pedido_actual,
-                cols_num=4
+                cols_num=4,
+                bloqueado=bloqueado
             )
 
         else:
@@ -1841,6 +1998,16 @@ if pedido_actual:
         st.divider()
 
         if estibas:
+            st.markdown("### 🖼️ Galería de Estibas")
+            renderizar_galeria(
+                "estibas",
+                estibas,
+                pedido_actual,
+                cols_num=4,
+                bloqueado=bloqueado
+            )
+
+        if estibas:
 
             st.markdown(
                 "### 📋 Resumen de Patas y Cajas"
@@ -2077,40 +2244,9 @@ if pedido_actual:
                             time.sleep(1.5)
                             st.rerun()
 
-                    filas_seleccionadas = st.multiselect(
-                        "Selecciona las fotos que deseas eliminar "
-                        "(puedes elegir varias):",
-                        options=range(len(df_editado_nuevo)),
-                        format_func=lambda i: (
-                            f"Pata {df_editado_nuevo.iloc[i]['Pata Final (Editable)']} "
-                            f"- {df_editado_nuevo.iloc[i]['Archivo']}"
-                        ),
-                        key=f"sel_borrar_estibas_{pedido_actual}"
-                    )
+                    # La selección y eliminación múltiple de estibas
+                    # se administra desde la galería común de fotografías.
 
-                    if filas_seleccionadas:
-
-                        if st.button(
-                            "🗑️ Eliminar Fotos Seleccionadas",
-                            type="primary",
-                            width="stretch"
-                        ):
-
-                            with st.spinner("Borrando fotos..."):
-
-                                cant = borrar_fotos_seleccionadas(
-                                    pedido_actual,
-                                    df_editado_nuevo,
-                                    filas_seleccionadas
-                                )
-
-                                st.success(
-                                    f"✅ {cant} fotos eliminadas correctamente."
-                                )
-
-                                st.session_state["reinicio_count"] += 1
-                                time.sleep(1)
-                                st.rerun()
 
                 total_patas = len(df_editado_nuevo)
 
@@ -2202,7 +2338,8 @@ if pedido_actual:
                     prefijo,
                     items,
                     pedido_actual,
-                    cols_num=4
+                    cols_num=4,
+                    bloqueado=bloqueado
                 )
 
             else:
@@ -2296,11 +2433,6 @@ if pedido_actual:
     seccion_extra(
         "5. Thermo-king",
         "thermoking_"
-    )
-
-    seccion_extra(
-        "6. Etiquetas",
-        "etiqueta_"
     )
 
 
