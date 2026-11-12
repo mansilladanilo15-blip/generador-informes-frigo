@@ -2435,6 +2435,11 @@ if pedido_actual:
         "thermoking_"
     )
 
+    seccion_extra(
+        "6. Etiquetas",
+        "etiqueta_"
+    )
+
 
 # ============================================================
 # GENERAR PDF Y FINALIZAR PEDIDO
