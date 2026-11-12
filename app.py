@@ -173,7 +173,10 @@ def _categoria_de_archivo(nombre_archivo):
 
 def _clave_seleccion_foto(pedido_id, key, nombre):
     firma = hashlib.sha1(nombre.encode("utf-8")).hexdigest()[:12]
-    return f"sel_foto_{pedido_id}_{key}_{firma}"
+    # Incluir el ciclo de reinicio permite limpiar visualmente la selección
+    # usando claves nuevas, sin modificar el estado de un checkbox ya creado.
+    ciclo = st.session_state.get("reinicio_count", 0)
+    return f"sel_foto_{pedido_id}_{key}_{firma}_{ciclo}"
 
 def _obtener_pedido_actual_nube(pedido_id):
     return next(
@@ -469,8 +472,9 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4, bloqueado=False):
                         st.warning("Algunas fotos no se pudieron mover:")
                         for error in errores:
                             st.write(f"• {error}")
-                    for nombre in seleccionadas:
-                        st.session_state[_clave_seleccion_foto(pedido_id, key, nombre)] = False
+                    # No modificar directamente las claves de checkbox:
+                    # ya fueron instanciadas en esta ejecución de Streamlit.
+                    # El incremento genera claves nuevas y deja la selección limpia.
                     st.session_state["reinicio_count"] += 1
                     st.rerun()
                 except Exception as exc:
