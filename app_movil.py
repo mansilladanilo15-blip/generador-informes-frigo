@@ -411,6 +411,8 @@ if pedido:
 
 
         # ==================================================
+
+        # ==================================================
         # SUBIR MÚLTIPLES FOTOGRAFÍAS DESDE GALERÍA
         # ==================================================
 
@@ -423,18 +425,21 @@ if pedido:
                 key=f"gal_documentacion_{pedido_id}"
             )
 
-
             if subidas:
 
+                total = len(subidas)
+
                 st.write(
-                    f"📁 Fotografías seleccionadas: **{len(subidas)}**"
+                    f"📁 Fotografías seleccionadas: **{total}**"
                 )
 
-                progreso = st.progress(0)
-
+                # Barra y texto de progreso
                 texto_progreso = st.empty()
 
-                total = len(subidas)
+                barra_progreso = st.progress(
+                    0,
+                    text=f"Preparando subida: 0/{total}"
+                )
 
                 nuevas_ok = 0
                 ya_existian = 0
@@ -443,15 +448,13 @@ if pedido:
 
                 for idx, foto in enumerate(subidas):
 
+                    numero = idx + 1
+
                     texto_progreso.info(
-                        f"⏳ Procesando fotografía "
-                        f"{idx + 1} de {total}: {foto.name}"
+                        f"⬆️ Subiendo {numero}/{total}: {foto.name}"
                     )
 
                     try:
-
-                        # Preparar la imagen para obtener
-                        # su firma antes de procesarla.
 
                         jpeg = preparar_jpeg(
                             foto.getvalue()
@@ -464,10 +467,6 @@ if pedido:
                         clave_procesada = (
                             f"{pedido_id}|documentacion|{firma}"
                         )
-
-
-                        # Evitar volver a procesar una imagen
-                        # que ya se gestionó en esta sesión.
 
                         if clave_procesada in st.session_state["procesados"]:
 
@@ -487,10 +486,8 @@ if pedido:
 
                             if creada:
                                 nuevas_ok += 1
-
                             else:
                                 ya_existian += 1
-
 
                     except Exception as exc:
 
@@ -498,19 +495,35 @@ if pedido:
                             f"{foto.name}: {exc}"
                         )
 
+                    # Actualizar progreso después de procesar
+                    # cada fotografía, haya tenido éxito o error.
 
-                    progreso.progress(
-                        (idx + 1) / total
+                    porcentaje = numero / total
+
+                    barra_progreso.progress(
+                        porcentaje,
+                        text=f"Subiendo {numero}/{total} fotografías"
                     )
 
+                # ------------------------------------------
+                # RESULTADO FINAL
+                # ------------------------------------------
 
-                progreso.empty()
                 texto_progreso.empty()
 
+                if fallidas:
 
-                # ------------------------------------------
-                # RESULTADO DE LA SUBIDA
-                # ------------------------------------------
+                    barra_progreso.progress(
+                        1.0,
+                        text=f"Proceso terminado: {total}/{total}"
+                    )
+
+                else:
+
+                    barra_progreso.progress(
+                        1.0,
+                        text=f"✅ Carga completada: {total}/{total}"
+                    )
 
                 if nuevas_ok:
 
@@ -535,11 +548,11 @@ if pedido:
                 if fallidas:
 
                     st.error(
-                        "❌ Algunas fotografías no pudieron subirse:"
+                        f"❌ Fotografías que no pudieron subirse: "
+                        f"{len(fallidas)}"
                     )
 
                     for error in fallidas:
-
                         st.write(f"• {error}")
 
 
