@@ -410,7 +410,6 @@ if pedido:
         )
 
 
-        # ==================================================
 
         # ==================================================
         # SUBIR MÚLTIPLES FOTOGRAFÍAS DESDE GALERÍA
@@ -429,131 +428,194 @@ if pedido:
 
                 total = len(subidas)
 
-                st.write(
-                    f"📁 Fotografías seleccionadas: **{total}**"
+                peso_total = sum(
+                    foto.size for foto in subidas
                 )
 
-                # Barra y texto de progreso
-                texto_progreso = st.empty()
-
-                barra_progreso = st.progress(
-                    0,
-                    text=f"Preparando subida: 0/{total}"
+                st.success(
+                    f"📁 Streamlit recibió {total} fotografías."
                 )
 
-                nuevas_ok = 0
-                ya_existian = 0
-                ya_procesadas = 0
-                fallidas = []
+                st.info(
+                    f"Peso total seleccionado: "
+                    f"{peso_total / (1024 * 1024):.2f} MB"
+                )
 
-                for idx, foto in enumerate(subidas):
+                with st.expander(
+                    "Ver fotografías seleccionadas",
+                    expanded=False
+                ):
 
-                    numero = idx + 1
+                    for foto in subidas:
 
-                    texto_progreso.info(
-                        f"⬆️ Subiendo {numero}/{total}: {foto.name}"
+                        st.write(
+                            f"📷 {foto.name} — "
+                            f"{foto.size / 1024:.1f} KB"
+                        )
+
+                st.divider()
+
+                iniciar_carga = st.button(
+                    "⬆️ SUBIR FOTOGRAFÍAS",
+                    type="primary",
+                    width="stretch",
+                    key=f"btn_subir_{pedido_id}"
+                )
+
+                if iniciar_carga:
+
+                    barra = st.progress(
+                        0,
+                        text=f"Preparando carga: 0/{total}"
                     )
+
+                    texto = st.empty()
+
+                    nuevas_ok = 0
+                    ya_existian = 0
+                    ya_procesadas = 0
+                    fallidas = []
 
                     try:
 
-                        jpeg = preparar_jpeg(
-                            foto.getvalue()
+                        # Consultar Storage una sola vez
+                        existentes = set(
+                            nube.obtener_fotos_nube(
+                                pedido_id
+                            ) or []
                         )
-
-                        firma = hashlib.sha256(
-                            jpeg
-                        ).hexdigest()[:24]
-
-                        clave_procesada = (
-                            f"{pedido_id}|documentacion|{firma}"
-                        )
-
-                        if clave_procesada in st.session_state["procesados"]:
-
-                            ya_procesadas += 1
-
-                        else:
-
-                            _, creada, firma = subir_foto_movil(
-                                pedido_id,
-                                "documentacion_",
-                                jpeg
-                            )
-
-                            st.session_state["procesados"][
-                                clave_procesada
-                            ] = True
-
-                            if creada:
-                                nuevas_ok += 1
-                            else:
-                                ya_existian += 1
 
                     except Exception as exc:
 
-                        fallidas.append(
-                            f"{foto.name}: {exc}"
+                        st.error(
+                            f"No se pudo consultar Supabase: {exc}"
                         )
 
-                    # Actualizar progreso después de procesar
-                    # cada fotografía, haya tenido éxito o error.
+                        st.stop()
 
-                    porcentaje = numero / total
+                    for idx, foto in enumerate(subidas):
 
-                    barra_progreso.progress(
-                        porcentaje,
-                        text=f"Subiendo {numero}/{total} fotografías"
+                        numero = idx + 1
+
+                        texto.info(
+                            f"⬆️ Subiendo {numero}/{total}: "
+                            f"{foto.name}"
+                        )
+
+                        try:
+
+                            # Preparar imagen una sola vez
+                            jpeg = preparar_jpeg(
+                                foto.getvalue()
+                            )
+
+                            firma = hashlib.sha256(
+                                jpeg
+                            ).hexdigest()[:24]
+
+                            nombre = (
+                                f"documentacion_{firma}.jpg"
+                            )
+
+                            clave = (
+                                f"{pedido_id}|documentacion|{firma}"
+                            )
+
+                            if clave in st.session_state["procesados"]:
+
+                                ya_procesadas += 1
+
+                            elif nombre in existentes:
+
+                                ya_existian += 1
+
+                                st.session_state[
+                                    "procesados"
+                                ][clave] = True
+
+                            else:
+
+                                # Subir directamente sin repetir
+                                # las consultas de fotografías.
+
+                                nube.subir_foto_nube(
+                                    pedido_id,
+                                    nombre,
+                                    jpeg
+                                )
+
+                                existentes.add(nombre)
+
+                                st.session_state[
+                                    "procesados"
+                                ][clave] = True
+
+                                nuevas_ok += 1
+
+                        except Exception as exc:
+
+                            fallidas.append(
+                                f"{foto.name}: {exc}"
+                            )
+
+                        barra.progress(
+                            numero / total,
+                            text=(
+                                f"Subiendo {numero}/{total} "
+                                f"fotografías"
+                            )
+                        )
+
+                    texto.empty()
+
+                    # Resultado final
+                    if fallidas:
+
+                        st.warning(
+                            "⚠️ La carga terminó con algunos errores."
+                        )
+
+                    else:
+
+                        st.success(
+                            "✅ Proceso de carga terminado."
+                        )
+
+                    st.write(
+                        f"📸 Fotografías nuevas: **{nuevas_ok}**"
                     )
 
-                # ------------------------------------------
-                # RESULTADO FINAL
-                # ------------------------------------------
-
-                texto_progreso.empty()
-
-                if fallidas:
-
-                    barra_progreso.progress(
-                        1.0,
-                        text=f"Proceso terminado: {total}/{total}"
+                    st.write(
+                        f"☁️ Ya existentes en la nube: **{ya_existian}**"
                     )
 
-                else:
-
-                    barra_progreso.progress(
-                        1.0,
-                        text=f"✅ Carga completada: {total}/{total}"
+                    st.write(
+                        f"🔄 Ya procesadas en esta sesión: "
+                        f"**{ya_procesadas}**"
                     )
 
-                if nuevas_ok:
+                    if fallidas:
 
-                    st.success(
-                        f"✅ Fotografías nuevas guardadas: {nuevas_ok}"
-                    )
+                        st.error(
+                            f"❌ Fotografías con errores: "
+                            f"{len(fallidas)}"
+                        )
 
-                if ya_existian:
+                        for error in fallidas:
+
+                            st.write(f"• {error}")
 
                     st.info(
-                        f"ℹ️ Fotografías que ya estaban en la nube: "
-                        f"{ya_existian}"
+                        "Puedes revisar las fotografías guardadas "
+                        "en la galería inferior."
                     )
 
-                if ya_procesadas:
+            else:
 
-                    st.info(
-                        f"ℹ️ Fotografías ya procesadas en esta sesión: "
-                        f"{ya_procesadas}"
-                    )
-
-                if fallidas:
-
-                    st.error(
-                        f"❌ Fotografías que no pudieron subirse: "
-                        f"{len(fallidas)}"
-                    )
-
-                    for error in fallidas:
-                        st.write(f"• {error}")
+                st.caption(
+                    "Selecciona una o varias fotografías "
+                    "para comenzar."
+                )
 
 
         # ==================================================
