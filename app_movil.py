@@ -1,6 +1,5 @@
 
 import streamlit as st
-import uuid
 import base64
 import time
 import hashlib
@@ -14,7 +13,8 @@ import conexion_nube as nube
 # ==========================================================
 
 def preparar_jpeg(contenido):
-    """Convierte JPG/PNG/cámara a JPEG real para que extensión y contenido coincidan."""
+    """Convierte JPG/PNG/cámara a JPEG real."""
+
     try:
         imagen = Image.open(BytesIO(bytes(contenido)))
         imagen = ImageOps.exif_transpose(imagen)
@@ -23,7 +23,13 @@ def preparar_jpeg(contenido):
             imagen = imagen.convert("RGB")
 
         salida = BytesIO()
-        imagen.save(salida, format="JPEG", quality=94, optimize=True)
+
+        imagen.save(
+            salida,
+            format="JPEG",
+            quality=94,
+            optimize=True
+        )
 
         resultado = salida.getvalue()
 
@@ -43,7 +49,10 @@ def preparar_jpeg(contenido):
 # ==========================================================
 
 def subir_foto_movil(pedido_id, prefijo, contenido):
-    """Nombre determinista por contenido: reintentar una subida no crea otra foto."""
+    """
+    Convierte la imagen a JPEG y la sube a Supabase.
+    Utiliza una firma para evitar fotografías duplicadas.
+    """
 
     jpeg = preparar_jpeg(contenido)
 
@@ -51,12 +60,16 @@ def subir_foto_movil(pedido_id, prefijo, contenido):
 
     nombre = f"{prefijo}{firma}.jpg"
 
-    existentes = nube.obtener_fotos_nube(pedido_id)
+    existentes = nube.obtener_fotos_nube(pedido_id) or []
 
     if nombre in existentes:
         return nombre, False, firma
 
-    nube.subir_foto_nube(pedido_id, nombre, jpeg)
+    nube.subir_foto_nube(
+        pedido_id,
+        nombre,
+        jpeg
+    )
 
     return nombre, True, firma
 
@@ -66,12 +79,15 @@ def subir_foto_movil(pedido_id, prefijo, contenido):
 # ==========================================================
 
 def eliminar_foto_verificada(pedido_id, nombre_foto, intentos=3):
-    """Elimina una foto con la función existente y verifica el listado remoto."""
+    """Elimina una fotografía y verifica que desaparezca de Storage."""
 
     ultimo_error = None
 
     try:
-        nube.borrar_foto_nube(pedido_id, nombre_foto)
+        nube.borrar_foto_nube(
+            pedido_id,
+            nombre_foto
+        )
 
     except Exception as exc:
         ultimo_error = exc
@@ -79,57 +95,31 @@ def eliminar_foto_verificada(pedido_id, nombre_foto, intentos=3):
     for intento in range(intentos):
 
         try:
-            fotos_restantes = nube.obtener_fotos_nube(pedido_id) or []
+
+            fotos_restantes = (
+                nube.obtener_fotos_nube(pedido_id) or []
+            )
 
             if nombre_foto not in fotos_restantes:
                 return True
 
         except Exception as exc:
+
             ultimo_error = exc
 
         if intento < intentos - 1:
             time.sleep(0.8)
 
-    detalle = f" Detalle: {ultimo_error}" if ultimo_error else ""
+    detalle = (
+        f" Detalle: {ultimo_error}"
+        if ultimo_error
+        else ""
+    )
 
     raise RuntimeError(
-        f"No se pudo confirmar el borrado de '{nombre_foto}'.{detalle}"
+        f"No se pudo confirmar el borrado de "
+        f"'{nombre_foto}'.{detalle}"
     )
-
-
-# ==========================================================
-# LIMPIAR REFERENCIAS DE ESTIBAS
-# ==========================================================
-
-def limpiar_referencias_estiba(pedido_id, nombre_foto):
-    """Limpia solo las referencias de la foto en los campos existentes."""
-
-    pedidos = nube.obtener_pedidos_nube() or []
-
-    pedido_data = next(
-        (
-            p.copy()
-            for p in pedidos
-            if str(p.get("id")) == str(pedido_id)
-        ),
-        None
-    )
-
-    if pedido_data is None:
-        raise RuntimeError(
-            "No se encontró el pedido para limpiar los datos de estiba."
-        )
-
-    cajas = pedido_data.get("cajas_estibas", {}) or {}
-    patas = pedido_data.get("patas_estibas", {}) or {}
-
-    cajas.pop(nombre_foto, None)
-    patas.pop(nombre_foto, None)
-
-    pedido_data["cajas_estibas"] = cajas
-    pedido_data["patas_estibas"] = patas
-
-    nube.subir_pedido_nube(pedido_id, pedido_data)
 
 
 # ==========================================================
@@ -170,7 +160,6 @@ st.markdown("""
             visibility: hidden !important;
         }
 
-        /* Oculta el botón "Manage app" de Streamlit Community Cloud */
         .stDeployButton,
         [data-testid="stAppDeployButton"],
         [data-testid="stAppDeployButton"] button,
@@ -189,12 +178,6 @@ st.markdown("""
 # VARIABLES DE SESIÓN
 # ==========================================================
 
-if "auto_refresh" not in st.session_state:
-    st.session_state["auto_refresh"] = False
-
-if "subida_terminada" not in st.session_state:
-    st.session_state["subida_terminada"] = False
-
 if "procesados" not in st.session_state:
     st.session_state["procesados"] = {}
 
@@ -206,16 +189,31 @@ if "confirmar_borrado_movil" not in st.session_state:
 # ENCABEZADO
 # ==========================================================
 
-st.title("📱  FRIGORIFICO DUMESTRE")
+st.title("📱 FRIGORIFICO DUMESTRE")
+
+st.markdown(
+    """
+    <p style="
+        text-align:center;
+        color:#64748b;
+        font-size:14px;
+        margin-top:-12px;
+    ">
+        Carga de fotografías de despacho
+    </p>
+    """,
+    unsafe_allow_html=True
+)
 
 
 # ==========================================================
 # OBTENER PEDIDOS
 # ==========================================================
 
-todos_los_pedidos = nube.obtener_pedidos_nube()
+todos_los_pedidos = nube.obtener_pedidos_nube() or []
 
 if not todos_los_pedidos:
+
     st.warning("⚠️ No hay pedidos creados en la nube.")
     st.stop()
 
@@ -262,18 +260,22 @@ else:
 # HISTORIAL DE PEDIDOS FINALIZADOS
 # ==========================================================
 
-with st.expander("📂 Historial de Finalizados", expanded=False):
+with st.expander(
+    "📂 Historial de Finalizados",
+    expanded=False
+):
 
     if finalizados:
 
         for p in finalizados:
+
             st.write(
                 f"🔒 {p['nro_pedido']} - {p['cliente']}"
             )
 
     else:
 
-        st.info("Aún no hay finalizados.")
+        st.info("Aún no hay pedidos finalizados.")
 
 
 st.divider()
@@ -287,53 +289,86 @@ if pedido:
 
     if pedido.get("estado") == "Finalizado":
 
-        st.success("🔒 **ESTE PEDIDO HA SIDO FINALIZADO**")
+        st.success(
+            "🔒 **ESTE PEDIDO HA SIDO FINALIZADO**"
+        )
 
         st.stop()
 
 
+    # ------------------------------------------------------
+    # TÍTULO DEL PEDIDO
+    # ------------------------------------------------------
 
     if pedido.get("tipo") == "Traslado":
 
-        titulo_cartel = f"🚚 Traslado: {pedido.get('nro_entrega', pedido['nro_pedido'])}"
-        subtitulo_cartel = f"Destino: {pedido.get('cliente', '-')}"
+        titulo_cartel = (
+            f"🚚 Traslado: "
+            f"{pedido.get('nro_entrega', pedido['nro_pedido'])}"
+        )
+
+        subtitulo_cartel = (
+            f"Destino: {pedido.get('cliente', '-')}"
+        )
 
     else:
 
-        titulo_cartel = f"📦 Pedido: {pedido['nro_pedido']}"
+        titulo_cartel = (
+            f"📦 Pedido: {pedido['nro_pedido']}"
+        )
 
         nro_entrega = pedido.get("nro_entrega")
 
         if nro_entrega and str(nro_entrega).strip() not in ("", "-"):
+
             subtitulo_cartel = (
-                f"Entrega: {nro_entrega} | Cliente: {pedido.get('cliente', '-')}"
+                f"Entrega: {nro_entrega} | "
+                f"Cliente: {pedido.get('cliente', '-')}"
             )
+
         else:
-            subtitulo_cartel = f"Cliente: {pedido.get('cliente', '-')}"
+
+            subtitulo_cartel = (
+                f"Cliente: {pedido.get('cliente', '-')}"
+            )
+
 
     with st.container(border=True):
 
         st.markdown(
-            f"<h2 style='text-align:center; color:#1a4d8f;'>{titulo_cartel}</h2>",
+            f"""
+            <h2 style="
+                text-align:center;
+                color:#1a4d8f;
+            ">
+                {titulo_cartel}
+            </h2>
+            """,
             unsafe_allow_html=True
         )
 
         st.markdown(
-            f"<h4 style='text-align:center;'>{subtitulo_cartel}</h4>",
+            f"""
+            <h4 style="text-align:center;">
+                {subtitulo_cartel}
+            </h4>
+            """,
             unsafe_allow_html=True
         )
+
 
     pedido_id = pedido["id"]
 
 
-
     # ======================================================
-    # CONFIRMACIÓN DE ELIMINACIÓN INDIVIDUAL
+    # CONFIRMACIÓN DE ELIMINACIÓN
     # ======================================================
 
     if st.session_state.get("confirmar_borrado_movil"):
 
-        st.success("✅ Borrado confirmado en la nube.")
+        st.success(
+            "✅ Borrado confirmado en la nube."
+        )
 
         if st.button(
             "🔄 Actualizar Galería",
@@ -342,748 +377,364 @@ if pedido:
         ):
 
             st.session_state["confirmar_borrado_movil"] = False
-            st.session_state.clear()
+
             st.cache_data.clear()
+
             st.rerun()
 
 
     # ======================================================
-    # DATOS DE ESTIBAS DEL PEDIDO
+    # ÚNICA SECCIÓN: DOCUMENTACIÓN
     # ======================================================
 
-    pedido_data = next(
-        (
-            p for p in nube.obtener_pedidos_nube()
-            if p["id"] == pedido_id
-        ),
-        {}
+    st.markdown("### 📸 Documentación")
+
+    st.info(
+        "Puedes seleccionar varias fotografías desde tu galería "
+        "o tomar fotografías directamente con la cámara. "
+        "Todas quedarán guardadas en este pedido para que "
+        "el administrador las clasifique desde la aplicación de PC."
     )
-
-    cajas_nube = pedido_data.get("cajas_estibas", {}) or {}
-    patas_nube = pedido_data.get("patas_estibas", {}) or {}
-
-
-    # ======================================================
-    # 0. DOCUMENTACIÓN
-    # ======================================================
-
-    fotos_doc = nube.obtener_fotos_nube(pedido_id) or []
-
-    fotos_doc = [
-        f for f in fotos_doc
-        if f.startswith("documentacion_")
-    ]
 
 
     with st.expander(
-        f"📄 0. Documentación ({len(fotos_doc)})",
+        "📸 Cargar fotografías",
         expanded=True
     ):
 
-        vista_doc = st.radio(
-            "Selecciona una opción:",
+        vista_documentacion = st.radio(
+            "Selecciona cómo deseas cargar las fotografías:",
             ["🖼️ Galería", "📷 Cámara"],
             horizontal=True,
-            key=f"vista_doc_{pedido_id}"
+            key=f"vista_documentacion_{pedido_id}"
         )
 
 
-        # --------------------------------------------------
-        # GALERÍA DE DOCUMENTACIÓN
-        # --------------------------------------------------
+        # ==================================================
+        # SUBIR MÚLTIPLES FOTOGRAFÍAS DESDE GALERÍA
+        # ==================================================
 
-        if vista_doc == "🖼️ Galería":
+        if vista_documentacion == "🖼️ Galería":
 
             subidas = st.file_uploader(
-                "Subir documentación",
+                "Seleccionar fotografías",
                 type=["jpg", "jpeg", "png"],
                 accept_multiple_files=True,
-                key=f"gal_doc_{pedido_id}"
+                key=f"gal_documentacion_{pedido_id}"
             )
+
 
             if subidas:
 
+                st.write(
+                    f"📁 Fotografías seleccionadas: **{len(subidas)}**"
+                )
+
                 progreso = st.progress(0)
-                texto_prog = st.empty()
+
+                texto_progreso = st.empty()
 
                 total = len(subidas)
 
                 nuevas_ok = 0
                 ya_existian = 0
+                ya_procesadas = 0
                 fallidas = []
 
                 for idx, foto in enumerate(subidas):
 
-                    texto_prog.info(
-                        f"⏳ Verificando {idx + 1} de {total}: {foto.name}"
+                    texto_progreso.info(
+                        f"⏳ Procesando fotografía "
+                        f"{idx + 1} de {total}: {foto.name}"
                     )
 
                     try:
+
+                        # Preparar la imagen para obtener
+                        # su firma antes de procesarla.
+
+                        jpeg = preparar_jpeg(
+                            foto.getvalue()
+                        )
+
+                        firma = hashlib.sha256(
+                            jpeg
+                        ).hexdigest()[:24]
+
+                        clave_procesada = (
+                            f"{pedido_id}|documentacion|{firma}"
+                        )
+
+
+                        # Evitar volver a procesar una imagen
+                        # que ya se gestionó en esta sesión.
+
+                        if clave_procesada in st.session_state["procesados"]:
+
+                            ya_procesadas += 1
+
+                        else:
+
+                            _, creada, firma = subir_foto_movil(
+                                pedido_id,
+                                "documentacion_",
+                                jpeg
+                            )
+
+                            st.session_state["procesados"][
+                                clave_procesada
+                            ] = True
+
+                            if creada:
+                                nuevas_ok += 1
+
+                            else:
+                                ya_existian += 1
+
+
+                    except Exception as exc:
+
+                        fallidas.append(
+                            f"{foto.name}: {exc}"
+                        )
+
+
+                    progreso.progress(
+                        (idx + 1) / total
+                    )
+
+
+                progreso.empty()
+                texto_progreso.empty()
+
+
+                # ------------------------------------------
+                # RESULTADO DE LA SUBIDA
+                # ------------------------------------------
+
+                if nuevas_ok:
+
+                    st.success(
+                        f"✅ Fotografías nuevas guardadas: {nuevas_ok}"
+                    )
+
+                if ya_existian:
+
+                    st.info(
+                        f"ℹ️ Fotografías que ya estaban en la nube: "
+                        f"{ya_existian}"
+                    )
+
+                if ya_procesadas:
+
+                    st.info(
+                        f"ℹ️ Fotografías ya procesadas en esta sesión: "
+                        f"{ya_procesadas}"
+                    )
+
+                if fallidas:
+
+                    st.error(
+                        "❌ Algunas fotografías no pudieron subirse:"
+                    )
+
+                    for error in fallidas:
+
+                        st.write(f"• {error}")
+
+
+        # ==================================================
+        # TOMAR FOTOGRAFÍAS CON CÁMARA
+        # ==================================================
+
+        elif vista_documentacion == "📷 Cámara":
+
+            cam = st.camera_input(
+                "Tomar fotografía",
+                key=f"cam_documentacion_{pedido_id}"
+            )
+
+
+            if cam:
+
+                try:
+
+                    jpeg = preparar_jpeg(
+                        cam.getvalue()
+                    )
+
+                    firma = hashlib.sha256(
+                        jpeg
+                    ).hexdigest()[:24]
+
+                    clave_procesada = (
+                        f"{pedido_id}|cam_documentacion|{firma}"
+                    )
+
+
+                    if clave_procesada in st.session_state["procesados"]:
+
+                        st.info(
+                            "ℹ️ Esta fotografía ya fue procesada."
+                        )
+
+                    else:
 
                         _, creada, firma = subir_foto_movil(
                             pedido_id,
                             "documentacion_",
-                            foto.getvalue()
+                            jpeg
                         )
 
                         st.session_state["procesados"][
-                            f"{pedido_id}|documentacion|{firma}"
+                            clave_procesada
                         ] = True
-
-                        nuevas_ok += int(creada)
-                        ya_existian += int(not creada)
-
-                    except Exception as exc:
-
-                        fallidas.append(f"{foto.name}: {exc}")
-
-                    progreso.progress((idx + 1) / total)
-
-
-                progreso.empty()
-                texto_prog.empty()
-
-                if nuevas_ok:
-                    st.success(
-                        f"✅ Documentación nueva guardada: {nuevas_ok}."
-                    )
-
-                if ya_existian:
-                    st.info(
-                        f"ℹ️ Fotos ya existentes, sin duplicar: {ya_existian}."
-                    )
-
-                if fallidas:
-
-                    st.error("No se pudieron subir todas las fotos:")
-
-                    for error in fallidas:
-                        st.write(f"• {error}")
-
-
-        # --------------------------------------------------
-        # CÁMARA DE DOCUMENTACIÓN
-        # --------------------------------------------------
-
-        elif vista_doc == "📷 Cámara":
-
-            cam = st.camera_input(
-                "Tomar foto",
-                key=f"cam_doc_{pedido_id}"
-            )
-
-            if cam:
-
-                try:
-
-                    _, creada, firma = subir_foto_movil(
-                        pedido_id,
-                        "documentacion_",
-                        cam.getvalue()
-                    )
-
-                    if creada:
-
-                        st.session_state["procesados"][
-                            f"{pedido_id}|cam_documentacion|{firma}"
-                        ] = True
-
-                        st.success("✅ Foto guardada en la nube.")
-
-                    else:
-
-                        st.info(
-                            "ℹ️ Esta foto ya estaba guardada; "
-                            "no se creó un duplicado."
-                        )
-
-                except Exception as exc:
-
-                    st.error(f"❌ No se pudo subir la foto: {exc}")
-
-
-        # --------------------------------------------------
-        # GALERÍA DE DOCUMENTACIÓN GUARDADA
-        # --------------------------------------------------
-
-        if fotos_doc:
-
-            cols = st.columns(2)
-
-            for idx, f in enumerate(fotos_doc):
-
-                with cols[idx % 2]:
-
-                    bytes_img = nube.descargar_foto_nube(
-                        pedido_id,
-                        f
-                    )
-
-                    b64 = base64.b64encode(bytes_img).decode("utf-8")
-
-                    mime = (
-                        "image/png"
-                        if f.lower().endswith(".png")
-                        else "image/jpeg"
-                    )
-
-                    st.markdown(f"""
-                        <div style="
-                            text-align:center;
-                            margin-bottom:5px;
-                        ">
-                            <img
-                                src="data:{mime};base64,{b64}"
-                                style="
-                                    width:100%;
-                                    height:160px;
-                                    object-fit:cover;
-                                    border-radius:8px;
-                                    border:1px solid #ddd;
-                                "
-                            >
-                        </div>
-                    """, unsafe_allow_html=True)
-
-
-                    if st.button(
-                        "🗑️ Borrar",
-                        key=f"del_doc_{pedido_id}_{f}",
-                        width="stretch"
-                    ):
-
-                        try:
-
-                            eliminar_foto_verificada(
-                                pedido_id,
-                                f
-                            )
-
-                            st.session_state[
-                                "confirmar_borrado_movil"
-                            ] = True
-
-                            st.session_state["procesados"] = {}
-                            st.session_state["subida_terminada"] = False
-
-                            st.cache_data.clear()
-                            st.rerun()
-
-                        except Exception as exc:
-
-                            st.error(
-                                f"❌ No se pudo borrar la foto: {exc}"
-                            )
-
-
-    st.divider()
-
-
-    # ======================================================
-    # 1. ESTIBAS
-    # ======================================================
-
-    fotos_estibas = nube.obtener_fotos_nube(pedido_id) or []
-
-    fotos_estibas = [
-        f for f in fotos_estibas
-        if f.startswith("estiba_pata_")
-    ]
-
-
-    if "expand_estibas" not in st.session_state:
-        st.session_state["expand_estibas"] = True
-
-
-    with st.expander(
-        f"📦 1. Estibas ({len(fotos_estibas)})",
-        expanded=st.session_state["expand_estibas"]
-    ):
-
-        vista_estibas = st.radio(
-            "Selecciona una opción:",
-            ["🖼️ Galería", "📷 Cámara"],
-            horizontal=True,
-            key=f"vista_estibas_{pedido_id}"
-        )
-
-
-        # --------------------------------------------------
-        # GALERÍA DE ESTIBAS
-        # --------------------------------------------------
-
-        if vista_estibas == "🖼️ Galería":
-
-            subidas = st.file_uploader(
-                "Selecciona varias fotos",
-                type=["jpg", "jpeg", "png"],
-                accept_multiple_files=True,
-                key=f"gal_estibas_multi_{pedido_id}"
-            )
-
-            if subidas:
-
-                progreso = st.progress(0)
-                texto_prog = st.empty()
-
-                total = len(subidas)
-
-                nuevas_ok = 0
-                ya_existian = 0
-                fallidas = []
-
-                for idx, foto in enumerate(subidas):
-
-                    texto_prog.info(
-                        f"⏳ Verificando {idx + 1} de {total}: {foto.name}"
-                    )
-
-                    try:
-
-                        _, creada, firma = subir_foto_movil(
-                            pedido_id,
-                            "estiba_pata_99_REVISAR_",
-                            foto.getvalue()
-                        )
-
-                        st.session_state["procesados"][
-                            f"{pedido_id}|estiba|{firma}"
-                        ] = True
-
-                        nuevas_ok += int(creada)
-                        ya_existian += int(not creada)
-
-                    except Exception as exc:
-
-                        fallidas.append(f"{foto.name}: {exc}")
-
-                    progreso.progress((idx + 1) / total)
-
-
-                progreso.empty()
-                texto_prog.empty()
-
-                if nuevas_ok:
-
-                    st.success(
-                        f"✅ Fotos de estiba nuevas guardadas: {nuevas_ok}."
-                    )
-
-                if ya_existian:
-
-                    st.info(
-                        "ℹ️ Fotos que ya estaban en la nube "
-                        f"y no se duplicaron: {ya_existian}."
-                    )
-
-                if fallidas:
-
-                    st.error("No se pudieron subir todas las fotos:")
-
-                    for error in fallidas:
-                        st.write(f"• {error}")
-
-
-        # --------------------------------------------------
-        # CÁMARA DE ESTIBAS
-        # --------------------------------------------------
-
-        elif vista_estibas == "📷 Cámara":
-
-            cam = st.camera_input(
-                "Tomar foto",
-                key=f"cam_estiba_{pedido_id}"
-            )
-
-            if cam:
-
-                try:
-
-                    _, creada, firma = subir_foto_movil(
-                        pedido_id,
-                        "estiba_pata_99_REVISAR_",
-                        cam.getvalue()
-                    )
-
-                    if creada:
-
-                        st.session_state["procesados"][
-                            f"{pedido_id}|cam_estiba|{firma}"
-                        ] = True
-
-                        st.success(
-                            "✅ Foto de estiba guardada. "
-                            "El administrador puede procesarla desde la PC."
-                        )
-
-                    else:
-
-                        st.info(
-                            "ℹ️ Esta foto ya estaba guardada; "
-                            "no se creó un duplicado."
-                        )
-
-                except Exception as exc:
-
-                    st.error(
-                        f"❌ No se pudo subir la foto de estiba: {exc}"
-                    )
-
-
-        st.divider()
-
-
-        # --------------------------------------------------
-        # GALERÍA DE ESTIBAS GUARDADAS
-        # --------------------------------------------------
-
-        if fotos_estibas:
-
-            cols = st.columns(2)
-
-            for idx, f in enumerate(fotos_estibas):
-
-                with cols[idx % 2]:
-
-                    bytes_img = nube.descargar_foto_nube(
-                        pedido_id,
-                        f
-                    )
-
-                    b64 = base64.b64encode(bytes_img).decode("utf-8")
-
-                    mime = (
-                        "image/png"
-                        if f.lower().endswith(".png")
-                        else "image/jpeg"
-                    )
-
-                    pata_asignada = patas_nube.get(
-                        f,
-                        f.split("_")[2].replace(".jpg", "").split("_")[0]
-                    )
-
-                    cajas = cajas_nube.get(f, 0)
-
-
-                    st.markdown(f"""
-                        <div style="
-                            text-align:center;
-                            margin-bottom:5px;
-                        ">
-                            <img
-                                src="data:{mime};base64,{b64}"
-                                style="
-                                    width:100%;
-                                    height:160px;
-                                    object-fit:cover;
-                                    border-radius:8px;
-                                    border:1px solid #ddd;
-                                "
-                            >
-
-                            <div style="
-                                font-size:12px;
-                                color:#1a4d8f;
-                                font-weight:bold;
-                                margin-top:2px;
-                            ">
-                                📦 Pata {pata_asignada} ({cajas} cajas)
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-
-                    if st.button(
-                        "🗑️ Borrar",
-                        key=f"del_estiba_{pedido_id}_{f}",
-                        width="stretch"
-                    ):
-
-                        try:
-
-                            eliminar_foto_verificada(
-                                pedido_id,
-                                f
-                            )
-
-                            limpiar_referencias_estiba(
-                                pedido_id,
-                                f
-                            )
-
-                            st.session_state[
-                                "confirmar_borrado_movil"
-                            ] = True
-
-                            st.session_state["procesados"] = {}
-                            st.session_state["subida_terminada"] = False
-
-                            st.cache_data.clear()
-                            st.rerun()
-
-                        except Exception as exc:
-
-                            st.error(
-                                f"❌ No se pudo borrar la foto de estiba: {exc}"
-                            )
-
-        else:
-
-            st.info("No hay fotos de estibas subidas.")
-
-
-    st.divider()
-
-
-    # ======================================================
-    # OTRAS CATEGORÍAS
-    # ======================================================
-
-    st.markdown("### 📸 Otras Categorías")
-
-
-    def mostrar_categoria(titulo, prefijo):
-
-        fotos_brutas = nube.obtener_fotos_nube(pedido_id) or []
-
-        fotos = [
-            f for f in fotos_brutas
-            if f.startswith(prefijo)
-        ]
-
-
-        with st.expander(
-            f"{titulo} ({len(fotos)})",
-            expanded=False
-        ):
-
-
-            # ----------------------------------------------
-            # FOTOGRAFÍAS GUARDADAS
-            # ----------------------------------------------
-
-            if fotos:
-
-                cols = st.columns(2)
-
-                for idx, f in enumerate(fotos):
-
-                    with cols[idx % 2]:
-
-                        bytes_img = nube.descargar_foto_nube(
-                            pedido_id,
-                            f
-                        )
-
-                        b64 = base64.b64encode(
-                            bytes_img
-                        ).decode("utf-8")
-
-
-                        st.markdown(f"""
-                            <div style="
-                                text-align:center;
-                                margin-bottom:5px;
-                            ">
-                                <img
-                                    src="data:image/jpeg;base64,{b64}"
-                                    style="
-                                        width:100%;
-                                        height:160px;
-                                        object-fit:cover;
-                                        border-radius:8px;
-                                        border:1px solid #ddd;
-                                    "
-                                >
-                            </div>
-                        """, unsafe_allow_html=True)
-
-
-                        if st.button(
-                            "🗑️ Borrar",
-                            key=f"del_{pedido_id}_{f}",
-                            width="stretch"
-                        ):
-
-                            try:
-
-                                eliminar_foto_verificada(
-                                    pedido_id,
-                                    f
-                                )
-
-                                st.session_state[
-                                    "confirmar_borrado_movil"
-                                ] = True
-
-                                st.session_state["procesados"] = {}
-                                st.session_state["subida_terminada"] = False
-
-                                st.cache_data.clear()
-                                st.rerun()
-
-                            except Exception as exc:
-
-                                st.error(
-                                    f"❌ No se pudo borrar la foto: {exc}"
-                                )
-
-
-            # ----------------------------------------------
-            # SELECTOR GALERÍA / CÁMARA
-            # ----------------------------------------------
-
-            vista_categoria = st.radio(
-                "Selecciona una opción:",
-                ["🖼️ Galería", "📷 Cámara"],
-                horizontal=True,
-                key=f"vista_{pedido_id}_{prefijo}"
-            )
-
-
-            # ----------------------------------------------
-            # SUBIR DESDE GALERÍA
-            # ----------------------------------------------
-
-            if vista_categoria == "🖼️ Galería":
-
-                subidas = st.file_uploader(
-                    "Subir fotos",
-                    type=["jpg", "jpeg", "png"],
-                    accept_multiple_files=True,
-                    key=f"gal_{pedido_id}_{prefijo}"
-                )
-
-                if subidas:
-
-                    progreso = st.progress(0)
-                    texto_prog = st.empty()
-
-                    total = len(subidas)
-
-                    nuevas_ok = 0
-                    ya_existian = 0
-                    fallidas = []
-
-                    for idx, foto_categoria in enumerate(subidas):
-
-                        texto_prog.info(
-                            f"⏳ Verificando {idx + 1} de {total}: "
-                            f"{foto_categoria.name}"
-                        )
-
-                        try:
-
-                            _, creada, firma = subir_foto_movil(
-                                pedido_id,
-                                prefijo,
-                                foto_categoria.getvalue()
-                            )
-
-                            st.session_state["procesados"][
-                                f"{pedido_id}|{prefijo}|{firma}"
-                            ] = True
-
-                            nuevas_ok += int(creada)
-                            ya_existian += int(not creada)
-
-                        except Exception as exc:
-
-                            fallidas.append(
-                                f"{foto_categoria.name}: {exc}"
-                            )
-
-                        progreso.progress((idx + 1) / total)
-
-
-                    progreso.empty()
-                    texto_prog.empty()
-
-                    if nuevas_ok:
-
-                        st.success(
-                            f"✅ Fotos nuevas guardadas: {nuevas_ok}."
-                        )
-
-                    if ya_existian:
-
-                        st.info(
-                            "ℹ️ Fotos que ya estaban guardadas, "
-                            f"sin duplicar: {ya_existian}."
-                        )
-
-                    if fallidas:
-
-                        st.error("No se pudieron subir todas las fotos:")
-
-                        for error in fallidas:
-                            st.write(f"• {error}")
-
-
-            # ----------------------------------------------
-            # TOMAR FOTO CON CÁMARA
-            # ----------------------------------------------
-
-            elif vista_categoria == "📷 Cámara":
-
-                cam = st.camera_input(
-                    "Tomar foto",
-                    key=f"cam_{pedido_id}_{prefijo}"
-                )
-
-                if cam:
-
-                    try:
-
-                        _, creada, firma = subir_foto_movil(
-                            pedido_id,
-                            prefijo,
-                            cam.getvalue()
-                        )
 
                         if creada:
 
-                            st.session_state["procesados"][
-                                f"{pedido_id}|cam_{prefijo}|{firma}"
-                            ] = True
-
-                            st.success("✅ Foto guardada en la nube.")
+                            st.success(
+                                "✅ Fotografía guardada correctamente."
+                            )
 
                         else:
 
                             st.info(
-                                "ℹ️ Esta foto ya estaba guardada; "
-                                "no se creó un duplicado."
+                                "ℹ️ Esta fotografía ya estaba guardada "
+                                "y no se creó un duplicado."
                             )
 
-                    except Exception as exc:
 
-                        st.error(
-                            f"❌ No se pudo subir la foto: {exc}"
-                        )
+                except Exception as exc:
+
+                    st.error(
+                        f"❌ No se pudo subir la fotografía: {exc}"
+                    )
+
+
+    st.divider()
 
 
     # ======================================================
-    # CATEGORÍAS DE FOTOGRAFÍAS
+    # GALERÍA ÚNICA DE FOTOGRAFÍAS DEL PEDIDO
     # ======================================================
 
-    mostrar_categoria(
-        "2. Fotos Camión",
-        "camion_"
-    )
+    st.subheader("🖼️ Fotografías guardadas")
 
-    mostrar_categoria(
-        "3. Termógrafo",
-        "termografo_"
-    )
+    # Se muestran todas las fotografías del pedido,
+    # incluidas las que ya existían con otros prefijos.
+    # Así no se ocultan fotografías antiguas.
 
-    mostrar_categoria(
-        "4. Sellos",
-        "sello_"
-    )
+    fotos_guardadas = nube.obtener_fotos_nube(
+        pedido_id
+    ) or []
 
-    mostrar_categoria(
-        "5. Thermo-king",
-        "thermoking_"
-    )
+
+    if fotos_guardadas:
+
+        st.caption(
+            f"Total de fotografías en este pedido: "
+            f"{len(fotos_guardadas)}"
+        )
+
+        cols = st.columns(2)
+
+        for idx, nombre_foto in enumerate(fotos_guardadas):
+
+            with cols[idx % 2]:
+
+                try:
+
+                    bytes_img = nube.descargar_foto_nube(
+                        pedido_id,
+                        nombre_foto
+                    )
+
+                    b64 = base64.b64encode(
+                        bytes_img
+                    ).decode("utf-8")
+
+
+                    mime = (
+                        "image/png"
+                        if nombre_foto.lower().endswith(".png")
+                        else "image/jpeg"
+                    )
+
+
+                    st.markdown(
+                        f"""
+                        <div style="
+                            text-align:center;
+                            margin-bottom:5px;
+                        ">
+                            <img
+                                src="data:{mime};base64,{b64}"
+                                style="
+                                    width:100%;
+                                    height:160px;
+                                    object-fit:cover;
+                                    border-radius:8px;
+                                    border:1px solid #ddd;
+                                "
+                            >
+
+                            <div style="
+                                font-size:11px;
+                                color:#64748b;
+                                margin-top:4px;
+                                overflow-wrap:anywhere;
+                            ">
+                                {nombre_foto}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+
+                    if st.button(
+                        "🗑️ Borrar",
+                        key=f"del_foto_{pedido_id}_{nombre_foto}",
+                        width="stretch"
+                    ):
+
+                        try:
+
+                            eliminar_foto_verificada(
+                                pedido_id,
+                                nombre_foto
+                            )
+
+                            st.session_state[
+                                "confirmar_borrado_movil"
+                            ] = True
+
+                            # Permite volver a subir una fotografía
+                            # si se eliminó previamente.
+
+                            st.session_state["procesados"] = {}
+
+                            st.cache_data.clear()
+
+                            st.rerun()
+
+
+                        except Exception as exc:
+
+                            st.error(
+                                f"❌ No se pudo borrar la fotografía: {exc}"
+                            )
+
+
+                except Exception as exc:
+
+                    st.error(
+                        f"No se pudo mostrar {nombre_foto}: {exc}"
+                    )
+
+
+    else:
+
+        st.info(
+            "Todavía no hay fotografías guardadas en este pedido."
+        )
