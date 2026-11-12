@@ -170,8 +170,15 @@ st.markdown("""
             visibility: hidden !important;
         }
 
-        .stDeployButton {
+        /* Oculta el botón "Manage app" de Streamlit Community Cloud */
+        .stDeployButton,
+        [data-testid="stAppDeployButton"],
+        [data-testid="stAppDeployButton"] button,
+        button[aria-label="Manage app"],
+        [title="Manage app"] {
             display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
         }
 
     </style>
@@ -199,16 +206,7 @@ if "confirmar_borrado_movil" not in st.session_state:
 # ENCABEZADO
 # ==========================================================
 
-col_titulo, col_boton = st.columns([4, 1])
-
-with col_titulo:
-    st.title("📱  FRIGORIFICO DUMESTRE")
-
-with col_boton:
-    if st.button("🔄 Sincronizar", width="stretch"):
-        st.session_state.clear()
-        st.cache_data.clear()
-        st.rerun()
+st.title("📱  FRIGORIFICO DUMESTRE")
 
 
 # ==========================================================
