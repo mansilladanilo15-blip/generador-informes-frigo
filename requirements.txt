@@ -7,5 +7,5 @@ supabase
 requests
 paddleocr
 paddlepaddle
-opencv-python-headless
+opencv-contrib-python==4.10.0.84
 numpy
