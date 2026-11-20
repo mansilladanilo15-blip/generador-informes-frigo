@@ -1991,115 +1991,256 @@ if pedido_actual:
                 if st.button(
                     "🚀 Analizar y Guardar Fotos",
                     type="primary",
-                    width="stretch"
+                    width="stretch",
+                    key=f"analizar_guardar_estibas_{pedido_actual}_{RC}"
                 ):
 
                     progreso = st.progress(0)
                     texto_progreso = st.empty()
-
-                    from ocr_bridge import analizar_fotos
-
                     total_fotos = len(fotos_manuales)
+                    errores_guardado = []
+                    errores_ocr = []
                     patas_guardadas = 0
-                    errores = []
-                    omitidas = 0
+                    pendientes_revision = 0
 
                     pedido_data = next(
                         (
                             p for p in nube.obtener_pedidos_nube()
-                            if p["id"] == pedido_actual
+                            if str(p.get("id")) == str(pedido_actual)
                         ),
                         {}
                     )
+                    pedido_data.setdefault("cajas_estibas", {})
+                    pedido_data.setdefault("patas_estibas", {})
 
-                    if "cajas_estibas" not in pedido_data:
-                        pedido_data["cajas_estibas"] = {}
-
-                    if "patas_estibas" not in pedido_data:
-                        pedido_data["patas_estibas"] = {}
-
-                    # Ejecutar OCR en una sola llamada con todas las imágenes.
-                    # El modelo se reutiliza y el callback actualiza el avance.
-                    fotos_para_ocr = [
-                        (foto.name, foto.getvalue())
-                        for foto in fotos_manuales
-                    ]
-
-                    def actualizar_progreso_ocr(indice, total, nombre):
-                        progreso.progress(indice / max(total, 1))
-                        texto_progreso.info(
-                            f"🔎 OCR: foto {indice} de {total} · {nombre}"
-                        )
-
-                    resultados_ocr = analizar_fotos(
-                        fotos_para_ocr,
-                        progress_callback=actualizar_progreso_ocr
-                    ) or []
-
-                    resultados_por_nombre = {
-                        r.get("archivo"): r for r in resultados_ocr
-                    }
+                    # ------------------------------------------------
+                    # PASO 1: GUARDAR PRIMERO TODAS LAS FOTOS EN STORAGE
+                    # Se guardan provisionalmente como Pata 99. Así, un
+                    # error del OCR nunca provoca que se pierda la foto.
+                    # ------------------------------------------------
+                    fotos_guardadas = []
+                    existentes = set(nube.obtener_fotos_nube(pedido_actual) or [])
 
                     for idx, foto in enumerate(fotos_manuales, start=1):
-                        texto_progreso.info(
-                            f"☁️ Guardando foto {idx} de {total_fotos}: {foto.name}"
-                        )
-                        r = resultados_por_nombre.get(foto.name, {})
-                        pata_detectada = r.get("pata")
-                        cajas_detectadas = r.get("total_cajas", 0)
                         contenido_foto = foto.getvalue()
-                        firma_foto = hashlib.sha256(contenido_foto).hexdigest()[:16]
+                        if not contenido_foto:
+                            errores_guardado.append(f"{foto.name}: archivo vacío")
+                            continue
+
+                        firma_foto = hashlib.sha256(contenido_foto).hexdigest()[:20]
+                        nombre_temporal = f"estiba_pata_99_REVISAR_{firma_foto}.jpg"
 
                         try:
-                            pata_detectada = int(pata_detectada)
+                            if nombre_temporal not in existentes:
+                                nube.subir_foto_nube(
+                                    pedido_actual,
+                                    nombre_temporal,
+                                    contenido_foto
+                                )
+                                existentes.add(nombre_temporal)
+
+                            fotos_guardadas.append({
+                                "nombre_original": foto.name,
+                                "nombre_temporal": nombre_temporal,
+                                "contenido": contenido_foto,
+                                "firma": firma_foto,
+                            })
+
+                        except Exception as exc:
+                            errores_guardado.append(f"{foto.name}: {exc}")
+
+                        progreso.progress(idx / max(total_fotos * 2, 1))
+                        texto_progreso.info(
+                            f"☁️ Guardando fotos en Supabase: {idx} de {total_fotos}"
+                        )
+
+                    # Confirmar en Storage antes de iniciar el OCR.
+                    try:
+                        existentes = set(nube.obtener_fotos_nube(pedido_actual) or [])
+                    except Exception as exc:
+                        existentes = set()
+                        errores_guardado.append(
+                            f"No se pudo verificar el almacenamiento en Supabase: {exc}"
+                        )
+
+                    fotos_confirmadas = [
+                        item for item in fotos_guardadas
+                        if item["nombre_temporal"] in existentes
+                    ]
+
+                    for item in fotos_guardadas:
+                        if item not in fotos_confirmadas:
+                            errores_guardado.append(
+                                f"{item['nombre_original']}: no se pudo confirmar su guardado en Storage"
+                            )
+
+                    # ------------------------------------------------
+                    # PASO 2: EJECUTAR OCR SOBRE LAS FOTOS CONFIRMADAS
+                    # Si el OCR falla, las fotos permanecen guardadas
+                    # como Pata 99 para revisión manual.
+                    # ------------------------------------------------
+                    resultados_ocr = []
+                    if fotos_confirmadas:
+                        try:
+                            from ocr_bridge import analizar_fotos
+
+                            fotos_para_ocr = [
+                                (item["nombre_original"], item["contenido"])
+                                for item in fotos_confirmadas
+                            ]
+
+                            def actualizar_progreso_ocr(indice, total, nombre):
+                                progreso.progress(
+                                    (total_fotos + indice) / max(total_fotos * 2, 1)
+                                )
+                                texto_progreso.info(
+                                    f"🔎 OCR: foto {indice} de {total} · {nombre}"
+                                )
+
+                            resultados_ocr = analizar_fotos(
+                                fotos_para_ocr,
+                                progress_callback=actualizar_progreso_ocr
+                            ) or []
+
+                        except Exception as exc:
+                            errores_ocr.append(str(exc))
+                            resultados_ocr = []
+
+                    # Se asocia por posición y no por nombre, porque dos
+                    # archivos descargados de WhatsApp pueden llamarse igual.
+                    for idx, item in enumerate(fotos_confirmadas, start=1):
+                        resultado = (
+                            resultados_ocr[idx - 1]
+                            if idx - 1 < len(resultados_ocr)
+                            and isinstance(resultados_ocr[idx - 1], dict)
+                            else {}
+                        )
+
+                        try:
+                            pata_detectada = int(resultado.get("pata", 99) or 99)
                         except (TypeError, ValueError):
                             pata_detectada = 99
-                        if pata_detectada <= 0:
+                        if pata_detectada <= 0 or pata_detectada > 99:
                             pata_detectada = 99
+
                         try:
-                            cajas_detectadas = int(cajas_detectadas or 0)
+                            cajas_detectadas = int(resultado.get("total_cajas", 0) or 0)
                         except (TypeError, ValueError):
                             cajas_detectadas = 0
 
+                        nombre_temporal = item["nombre_temporal"]
+                        nombre_final = nombre_temporal
+
+                        # Si OCR encontró una pata válida, crear el nombre
+                        # definitivo, verificarlo y luego borrar el temporal.
+                        if pata_detectada != 99:
+                            nombre_propuesto = (
+                                f"estiba_pata_{pata_detectada}_{item['firma']}.jpg"
+                            )
+                            try:
+                                actuales = set(nube.obtener_fotos_nube(pedido_actual) or [])
+                                if nombre_propuesto not in actuales:
+                                    nube.subir_foto_nube(
+                                        pedido_actual,
+                                        nombre_propuesto,
+                                        item["contenido"]
+                                    )
+
+                                actuales = set(nube.obtener_fotos_nube(pedido_actual) or [])
+                                if nombre_propuesto not in actuales:
+                                    raise RuntimeError(
+                                        "No se pudo confirmar el archivo con la pata reconocida."
+                                    )
+
+                                nombre_final = nombre_propuesto
+
+                                if nombre_temporal != nombre_final:
+                                    nube.borrar_foto_nube(
+                                        pedido_actual,
+                                        nombre_temporal
+                                    )
+                                    actuales = set(nube.obtener_fotos_nube(pedido_actual) or [])
+                                    if nombre_temporal in actuales:
+                                        # Mantener el temporal es preferible a perder la foto.
+                                        errores_guardado.append(
+                                            f"{item['nombre_original']}: se guardó la pata {pata_detectada}, "
+                                            "pero quedó también el archivo temporal de revisión."
+                                        )
+
+                                patas_guardadas += 1
+
+                            except Exception as exc:
+                                # La foto temporal ya fue confirmada: no se elimina.
+                                nombre_final = nombre_temporal
+                                pata_detectada = 99
+                                errores_guardado.append(
+                                    f"{item['nombre_original']}: no se pudo finalizar la asignación OCR: {exc}"
+                                )
+
                         if pata_detectada == 99:
-                            nuevo_nombre = f"estiba_pata_99_REVISAR_{firma_foto}.jpg"
-                            errores.append(foto.name)
-                        else:
-                            nuevo_nombre = f"estiba_pata_{pata_detectada}_{firma_foto}.jpg"
-                            patas_guardadas += 1
+                            pendientes_revision += 1
+                            if not errores_ocr and not resultado:
+                                errores_ocr.append(
+                                    f"No se obtuvo resultado OCR para {item['nombre_original']}"
+                                )
 
-                        existentes_actuales = set(nube.obtener_fotos_nube(pedido_actual) or [])
-                        if nuevo_nombre not in existentes_actuales:
-                            nube.subir_foto_nube(pedido_actual, nuevo_nombre, contenido_foto)
-                        pedido_data["cajas_estibas"][nuevo_nombre] = cajas_detectadas
-                        pedido_data["patas_estibas"][nuevo_nombre] = pata_detectada
-                        progreso.progress(idx / max(total_fotos, 1))
+                        pedido_data["cajas_estibas"][nombre_final] = cajas_detectadas
+                        pedido_data["patas_estibas"][nombre_final] = pata_detectada
 
-                    nube.subir_pedido_nube(
-                        pedido_actual,
-                        pedido_data
-                    )
+                        # Si el nombre cambió, limpiar metadatos temporales antiguos.
+                        if nombre_final != nombre_temporal:
+                            pedido_data["cajas_estibas"].pop(nombre_temporal, None)
+                            pedido_data["patas_estibas"].pop(nombre_temporal, None)
 
-                    texto_progreso.empty()
-                    progreso.empty()
-
-                    if errores:
-
-                        st.warning(
-                            f"⚠️ Se procesaron {patas_guardadas} fotos. "
-                            f"Fotos sin pata: {', '.join(errores)}"
+                        progreso.progress(
+                            (total_fotos + idx) / max(total_fotos * 2, 1)
+                        )
+                        texto_progreso.info(
+                            f"📋 Revisando resultado: {idx} de {len(fotos_confirmadas)}"
                         )
 
-                    else:
-
-                        st.success(
-                            f"✅ Se procesaron y guardaron "
-                            f"{patas_guardadas} fotos correctamente."
+                    # Guardar metadatos aunque algunas fotos queden en Pata 99.
+                    try:
+                        nube.subir_pedido_nube(pedido_actual, pedido_data)
+                    except Exception as exc:
+                        errores_guardado.append(
+                            f"No se pudieron guardar los datos de patas y cajas: {exc}"
                         )
 
                     st.cache_data.clear()
+                    texto_progreso.empty()
+                    progreso.empty()
+
+                    if fotos_confirmadas:
+                        st.success(
+                            f"Proceso terminado: {len(fotos_confirmadas)} foto(s) guardada(s) en Storage. "
+                            f"{patas_guardadas} con pata reconocida y {pendientes_revision} pendiente(s) de revisión."
+                        )
+                    else:
+                        st.error(
+                            "No se pudo confirmar ninguna fotografía en Supabase. "
+                            "Revisa los errores que aparecen a continuación."
+                        )
+
+                    if errores_ocr:
+                        st.warning(
+                            "El OCR no pudo completar el reconocimiento. Las fotos confirmadas "
+                            "se conservaron en Estibas como Pata 99 – Revisar."
+                        )
+                        for error in errores_ocr:
+                            st.caption(f"OCR: {error}")
+
+                    if errores_guardado:
+                        st.error("Se encontraron problemas durante el guardado:")
+                        for error in errores_guardado:
+                            st.write(f"• {error}")
+
                     st.session_state["reinicio_count"] += 1
-                    guardar_mensaje("success", "✅ Proceso de estibas terminado.")
+                    guardar_mensaje(
+                        "success" if fotos_confirmadas else "error",
+                        f"Proceso de Estibas: {len(fotos_confirmadas)} foto(s) guardada(s), "
+                        f"{patas_guardadas} reconocida(s), {pendientes_revision} para revisar."
+                    )
                     st.rerun()
 
         st.divider()
