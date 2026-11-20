@@ -99,6 +99,53 @@ st.title("📄 Generador de Informes de Pedidos y Traslados")
 # FUNCIONES GENERALES
 # ============================================================
 
+# ============================================================
+# MENSAJES PERSISTENTES
+# ============================================================
+
+if "mensaje_pendiente" not in st.session_state:
+    st.session_state["mensaje_pendiente"] = None
+
+
+def guardar_mensaje(tipo, mensaje):
+    """
+    Guarda un mensaje para mostrarlo después de st.rerun().
+    """
+    st.session_state["mensaje_pendiente"] = {
+        "tipo": tipo,
+        "mensaje": mensaje
+    }
+
+
+def mostrar_mensaje_pendiente():
+    """
+    Muestra el último mensaje guardado y lo retira.
+    """
+    mensaje = st.session_state.get("mensaje_pendiente")
+
+    if not mensaje:
+        return
+
+    tipo = mensaje.get("tipo")
+    texto = mensaje.get("mensaje", "")
+
+    if tipo == "success":
+        st.success(texto)
+
+    elif tipo == "warning":
+        st.warning(texto)
+
+    elif tipo == "error":
+        st.error(texto)
+
+    elif tipo == "info":
+        st.info(texto)
+
+    st.session_state["mensaje_pendiente"] = None
+
+
+mostrar_mensaje_pendiente()
+
 def convertir_a_base64(bytes_imagen, max_ancho=800):
     try:
         img = Image.open(BytesIO(bytes_imagen))
@@ -1210,7 +1257,11 @@ def mostrar_gestion_pedidos():
                 datos
             )
 
-            st.success("✅ Pedido creado.")
+            guardar_mensaje(
+                "success",
+                "✅ PEDIDO CREADO CORRECTAMENTE."
+            )
+
             st.rerun()
 
 
