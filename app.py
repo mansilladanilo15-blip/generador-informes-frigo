@@ -94,57 +94,38 @@ RC = st.session_state["reinicio_count"]
 
 st.title("📄 Generador de Informes de Pedidos y Traslados")
 
+# Los mensajes se muestran después de los rerun y se consumen una sola vez.
+def guardar_mensaje(tipo, mensaje):
+    cola = st.session_state.setdefault("mensajes_pendientes", [])
+    cola.append((tipo, mensaje))
+
+
+def mostrar_mensajes_pendientes():
+    cola = st.session_state.pop("mensajes_pendientes", [])
+    for tipo, mensaje in cola:
+        if tipo == "success":
+            st.success(mensaje)
+        elif tipo == "warning":
+            st.warning(mensaje)
+        elif tipo == "error":
+            st.error(mensaje)
+        else:
+            st.info(mensaje)
+
+
+mostrar_mensajes_pendientes()
+
 
 # ============================================================
 # FUNCIONES GENERALES
 # ============================================================
 
-# ============================================================
-# MENSAJES PERSISTENTES
-# ============================================================
+@st.cache_data(ttl=300, show_spinner=False)
+def descargar_foto_cacheada(pedido_id, nombre_foto):
+    """Reutiliza la descarga de una foto durante 5 minutos."""
+    contenido = nube.descargar_foto_nube(pedido_id, nombre_foto)
+    return bytes(contenido) if contenido else None
 
-if "mensaje_pendiente" not in st.session_state:
-    st.session_state["mensaje_pendiente"] = None
-
-
-def guardar_mensaje(tipo, mensaje):
-    """
-    Guarda un mensaje para mostrarlo después de st.rerun().
-    """
-    st.session_state["mensaje_pendiente"] = {
-        "tipo": tipo,
-        "mensaje": mensaje
-    }
-
-
-def mostrar_mensaje_pendiente():
-    """
-    Muestra el último mensaje guardado y lo retira.
-    """
-    mensaje = st.session_state.get("mensaje_pendiente")
-
-    if not mensaje:
-        return
-
-    tipo = mensaje.get("tipo")
-    texto = mensaje.get("mensaje", "")
-
-    if tipo == "success":
-        st.success(texto)
-
-    elif tipo == "warning":
-        st.warning(texto)
-
-    elif tipo == "error":
-        st.error(texto)
-
-    elif tipo == "info":
-        st.info(texto)
-
-    st.session_state["mensaje_pendiente"] = None
-
-
-mostrar_mensaje_pendiente()
 
 def convertir_a_base64(bytes_imagen, max_ancho=800):
     try:
@@ -419,7 +400,7 @@ def renderizar_galeria(key, fotos, pedido_id, cols_num=4, bloqueado=False):
         with cols[i % cols_num]:
             bytes_img = None
             try:
-                bytes_img = nube.descargar_foto_nube(pedido_id, nombre)
+                bytes_img = descargar_foto_cacheada(pedido_id, nombre)
                 b64 = convertir_a_base64(bytes_img, max_ancho=500)
                 if b64:
                     st.markdown(
@@ -1257,11 +1238,10 @@ def mostrar_gestion_pedidos():
                 datos
             )
 
-            guardar_mensaje(
-                "success",
-                "✅ PEDIDO CREADO CORRECTAMENTE."
-            )
-
+            guardar_mensaje("success", "✅ Pedido creado correctamente.")
+            st.session_state["pedido_actual_id"] = pedido_id
+            st.session_state["cargar_ultimo"] = datos.copy()
+            st.session_state["fotos_ocultas"] = set()
             st.rerun()
 
 
@@ -1419,6 +1399,7 @@ with st.sidebar:
 
                     st.session_state["cargar_ultimo"] = p
                     st.session_state["pedido_actual_id"] = p["id"]
+                    st.cache_data.clear()
                     st.session_state["reinicio_count"] += 1
                     st.session_state["fotos_ocultas"] = set()
                     st.rerun()
@@ -1802,10 +1783,10 @@ with st.form("datos"):
 
                 if pedido_encontrado:
 
-                    st.success(
+                    guardar_mensaje(
+                        "success",
                         "✅ Datos del pedido guardados correctamente."
                     )
-
                     st.rerun()
 
                 else:
@@ -1923,6 +1904,7 @@ if pedido_actual:
                         f"Nuevas fotos: {subidas_ok}."
                     )
 
+                    st.cache_data.clear()
                     st.session_state["reinicio_count"] += 1
                     st.session_state["fotos_ocultas"] = set()
                     st.rerun()
@@ -2036,84 +2018,62 @@ if pedido_actual:
                     if "patas_estibas" not in pedido_data:
                         pedido_data["patas_estibas"] = {}
 
-                    for idx, foto in enumerate(fotos_manuales):
+                    # Ejecutar OCR en una sola llamada con todas las imágenes.
+                    # El modelo se reutiliza y el callback actualiza el avance.
+                    fotos_para_ocr = [
+                        (foto.name, foto.getvalue())
+                        for foto in fotos_manuales
+                    ]
 
+                    def actualizar_progreso_ocr(indice, total, nombre):
+                        progreso.progress(indice / max(total, 1))
                         texto_progreso.info(
-                            f"⏳ Procesando foto {idx + 1} "
-                            f"de {total_fotos}: {foto.name}"
+                            f"🔎 OCR: foto {indice} de {total} · {nombre}"
                         )
 
-                        resultados = analizar_fotos([
-                            (foto.name, foto.getvalue())
-                        ])
+                    resultados_ocr = analizar_fotos(
+                        fotos_para_ocr,
+                        progress_callback=actualizar_progreso_ocr
+                    ) or []
 
-                        for r in resultados:
+                    resultados_por_nombre = {
+                        r.get("archivo"): r for r in resultados_ocr
+                    }
 
-                            pata_detectada = r.get("pata")
-                            cajas_detectadas = r.get(
-                                "total_cajas",
-                                0
-                            )
-
-                            contenido_foto = foto.getvalue()
-
-                            firma_foto = hashlib.sha256(
-                                contenido_foto
-                            ).hexdigest()[:16]
-
-                            if (
-                                pata_detectada
-                                and pata_detectada != 99
-                            ):
-
-                                nuevo_nombre = (
-                                    f"estiba_pata_{int(pata_detectada)}_"
-                                    f"{firma_foto}.jpg"
-                                )
-
-                                if nuevo_nombre in fotos:
-                                    omitidas += 1
-
-                                nube.subir_foto_nube(
-                                    pedido_actual,
-                                    nuevo_nombre,
-                                    contenido_foto
-                                )
-
-                                pedido_data["cajas_estibas"][nuevo_nombre] = (
-                                    cajas_detectadas
-                                )
-
-                                pedido_data["patas_estibas"][nuevo_nombre] = (
-                                    pata_detectada
-                                )
-
-                                patas_guardadas += 1
-
-                            else:
-
-                                nuevo_nombre = (
-                                    f"estiba_pata_99_REVISAR_"
-                                    f"{firma_foto}.jpg"
-                                )
-
-                                nube.subir_foto_nube(
-                                    pedido_actual,
-                                    nuevo_nombre,
-                                    contenido_foto
-                                )
-
-                                pedido_data["cajas_estibas"][nuevo_nombre] = (
-                                    cajas_detectadas
-                                )
-
-                                pedido_data["patas_estibas"][nuevo_nombre] = 99
-
-                                errores.append(foto.name)
-
-                        progreso.progress(
-                            (idx + 1) / total_fotos
+                    for idx, foto in enumerate(fotos_manuales, start=1):
+                        texto_progreso.info(
+                            f"☁️ Guardando foto {idx} de {total_fotos}: {foto.name}"
                         )
+                        r = resultados_por_nombre.get(foto.name, {})
+                        pata_detectada = r.get("pata")
+                        cajas_detectadas = r.get("total_cajas", 0)
+                        contenido_foto = foto.getvalue()
+                        firma_foto = hashlib.sha256(contenido_foto).hexdigest()[:16]
+
+                        try:
+                            pata_detectada = int(pata_detectada)
+                        except (TypeError, ValueError):
+                            pata_detectada = 99
+                        if pata_detectada <= 0:
+                            pata_detectada = 99
+                        try:
+                            cajas_detectadas = int(cajas_detectadas or 0)
+                        except (TypeError, ValueError):
+                            cajas_detectadas = 0
+
+                        if pata_detectada == 99:
+                            nuevo_nombre = f"estiba_pata_99_REVISAR_{firma_foto}.jpg"
+                            errores.append(foto.name)
+                        else:
+                            nuevo_nombre = f"estiba_pata_{pata_detectada}_{firma_foto}.jpg"
+                            patas_guardadas += 1
+
+                        existentes_actuales = set(nube.obtener_fotos_nube(pedido_actual) or [])
+                        if nuevo_nombre not in existentes_actuales:
+                            nube.subir_foto_nube(pedido_actual, nuevo_nombre, contenido_foto)
+                        pedido_data["cajas_estibas"][nuevo_nombre] = cajas_detectadas
+                        pedido_data["patas_estibas"][nuevo_nombre] = pata_detectada
+                        progreso.progress(idx / max(total_fotos, 1))
 
                     nube.subir_pedido_nube(
                         pedido_actual,
@@ -2137,8 +2097,9 @@ if pedido_actual:
                             f"{patas_guardadas} fotos correctamente."
                         )
 
+                    st.cache_data.clear()
                     st.session_state["reinicio_count"] += 1
-                    time.sleep(2)
+                    guardar_mensaje("success", "✅ Proceso de estibas terminado.")
                     st.rerun()
 
         st.divider()
@@ -2205,68 +2166,40 @@ if pedido_actual:
                             if "patas_estibas" not in pedido_data:
                                 pedido_data["patas_estibas"] = {}
 
-                            for f in fotos_99:
+                            fotos_99_bytes = [
+                                (f, nube.descargar_foto_nube(pedido_actual, f))
+                                for f in fotos_99
+                            ]
+                            fotos_99_bytes = [x for x in fotos_99_bytes if x[1]]
+                            resultados_99 = analizar_fotos(fotos_99_bytes) or []
+                            resultados_por_nombre = {
+                                r.get("archivo"): r for r in resultados_99
+                            }
 
-                                bytes_foto = nube.descargar_foto_nube(
-                                    pedido_actual,
-                                    f
-                                )
+                            for f, bytes_foto in fotos_99_bytes:
+                                r = resultados_por_nombre.get(f, {})
+                                pata_detectada = r.get("pata")
+                                cajas_detectadas = r.get("total_cajas", 0)
+                                try:
+                                    pata_detectada = int(pata_detectada)
+                                except (TypeError, ValueError):
+                                    pata_detectada = 99
 
-                                resultados = analizar_fotos([
-                                    (f, bytes_foto)
-                                ])
-
-                                for r in resultados:
-
-                                    pata_detectada = r.get("pata")
-                                    cajas_detectadas = r.get(
-                                        "total_cajas",
-                                        0
-                                    )
-
-                                    if (
-                                        pata_detectada
-                                        and pata_detectada != 99
-                                    ):
-
-                                        firma_foto = hashlib.sha256(
-                                            bytes_foto
-                                        ).hexdigest()[:16]
-
-                                        nuevo_nombre = (
-                                            f"estiba_pata_{int(pata_detectada)}_"
-                                            f"{firma_foto}.jpg"
-                                        )
-
-                                        nube.subir_foto_nube(
-                                            pedido_actual,
-                                            nuevo_nombre,
-                                            bytes_foto
-                                        )
-
-                                        nube.borrar_foto_nube(
-                                            pedido_actual,
-                                            f
-                                        )
-
-                                        pedido_data["cajas_estibas"][nuevo_nombre] = (
-                                            cajas_detectadas
-                                        )
-
-                                        pedido_data["patas_estibas"][nuevo_nombre] = (
-                                            pata_detectada
-                                        )
-
-                                        if f in pedido_data["cajas_estibas"]:
-                                            del pedido_data["cajas_estibas"][f]
-
-                                        if f in pedido_data["patas_estibas"]:
-                                            del pedido_data["patas_estibas"][f]
+                                if pata_detectada > 0 and pata_detectada != 99:
+                                    firma_foto = hashlib.sha256(bytes_foto).hexdigest()[:16]
+                                    nuevo_nombre = f"estiba_pata_{pata_detectada}_{firma_foto}.jpg"
+                                    nube.subir_foto_nube(pedido_actual, nuevo_nombre, bytes_foto)
+                                    nube.borrar_foto_nube(pedido_actual, f)
+                                    pedido_data["cajas_estibas"][nuevo_nombre] = int(cajas_detectadas or 0)
+                                    pedido_data["patas_estibas"][nuevo_nombre] = pata_detectada
+                                    pedido_data["cajas_estibas"].pop(f, None)
+                                    pedido_data["patas_estibas"].pop(f, None)
 
                             nube.subir_pedido_nube(
                                 pedido_actual,
                                 pedido_data
                             )
+                            st.cache_data.clear()
 
                             st.success(
                                 "✅ Fotos procesadas y patas asignadas correctamente."
@@ -2558,6 +2491,7 @@ if pedido_actual:
                             f"Fotos guardadas. Nuevas: {subidas_ok}."
                         )
 
+                        st.cache_data.clear()
                         st.session_state["reinicio_count"] += 1
                         st.session_state["fotos_ocultas"] = set()
                         st.rerun()
